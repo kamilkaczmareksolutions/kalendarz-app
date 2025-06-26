@@ -15,13 +15,6 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'Content-Type, x-webhook-token',
 };
 
-export async function OPTIONS(req: NextRequest) {
-  return new Response(null, {
-    status: 204,
-    headers: corsHeaders,
-  });
-}
-
 export async function POST(req: NextRequest) {
   const token = req.headers.get("x-webhook-token");
   if (token !== process.env.WEBHOOK_SECRET) {
