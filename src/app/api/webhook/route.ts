@@ -11,8 +11,6 @@ dayjs.extend(isBetween)
 
 const SCOPES = ['https://www.googleapis.com/auth/calendar.readonly']
 
-import serviceAccount from '@/app/lib/service-account.json'
-
 export async function POST(req: NextRequest) {
   const token = req.headers.get('x-webhook-token')
   if (token !== process.env.WEBHOOK_SECRET) {
@@ -22,8 +20,8 @@ export async function POST(req: NextRequest) {
   const calendar = google.calendar({
     version: 'v3',
     auth: new google.auth.JWT({
-      email: serviceAccount.client_email,
-      key: serviceAccount.private_key,
+      email: process.env.GOOGLE_CLIENT_EMAIL,
+      key: process.env.GOOGLE_PRIVATE_KEY?.replace(/\\n/g, '\n'),
       scopes: SCOPES,
     }),
   })

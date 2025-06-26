@@ -9,8 +9,6 @@ dayjs.extend(timezone);
 
 const SCOPES = ["https://www.googleapis.com/auth/calendar", "https://www.googleapis.com/auth/calendar.events"];
 
-import serviceAccount from "@/app/lib/service-account.json";
-
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
@@ -51,8 +49,8 @@ export async function POST(req: NextRequest) {
   const calendar = google.calendar({
     version: "v3",
     auth: new google.auth.JWT({
-      email: serviceAccount.client_email,
-      key: serviceAccount.private_key,
+      email: process.env.GOOGLE_CLIENT_EMAIL,
+      key: process.env.GOOGLE_PRIVATE_KEY?.replace(/\\n/g, '\n'),
       scopes: SCOPES,
       subject: "kamil.kaczmarek@lejki.pro"
     }),
