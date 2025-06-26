@@ -9,12 +9,6 @@ dayjs.extend(timezone);
 
 const SCOPES = ["https://www.googleapis.com/auth/calendar", "https://www.googleapis.com/auth/calendar.events"];
 
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-  'Access-Control-Allow-Headers': 'Content-Type, x-webhook-token',
-};
-
 export async function POST(req: NextRequest) {
   const token = req.headers.get("x-webhook-token");
   if (token !== process.env.WEBHOOK_SECRET) {
