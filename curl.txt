@@ -1,0 +1,7 @@
+webhook:
+
+curl -X POST http://localhost:3000/api/webhook -H "Content-Type: application/json" -H "x-webhook-token: my_secret_token"
+
+reserve:
+
+curl -X POST http://localhost:3000/api/reserve -H "Content-Type: application/json" -H "x-webhook-token: my_secret_token" -d "{\"slot\": \"2025-06-17T09:00:00+02:00\", \"name\": \"Jan Kowalski\", \"phone\": \"+48123456789\", \"email\": \"jan.kowalski@example.com\"}"
