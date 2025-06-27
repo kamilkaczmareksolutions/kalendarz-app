@@ -29,7 +29,7 @@ export async function POST(req: NextRequest) {
   }
 
   const start = dayjs(slot).tz("Europe/Warsaw");
-  const end = start.add(1, "hour");
+  const end = start.add(30, "minutes");
 
   const calendarId = process.env.GOOGLE_CALENDAR_ID!;
 

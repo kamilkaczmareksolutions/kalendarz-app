@@ -17,6 +17,8 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ message: 'Forbidden – invalid token' }, { status: 403 })
   }
 
+  const body = await req.json().catch(() => ({})) // Pozwalamy na puste body
+
   const calendar = google.calendar({
     version: 'v3',
     auth: new google.auth.JWT({
@@ -26,15 +28,17 @@ export async function POST(req: NextRequest) {
     }),
   })
 
-  const now = dayjs()
-  const end = now.add(7, 'day')
+  // Ustawienia domyślne i parsowanie z body
+  const startDate = body.date_from ? dayjs(body.date_from) : dayjs().add(1, 'day')
+  const endDate = body.date_to ? dayjs(body.date_to) : dayjs().add(14, 'day')
+  const startTime = body.time_from ? parseInt(body.time_from.split(':')[0]) : 9
+  const endTime = body.time_to ? parseInt(body.time_to.split(':')[0]) : 17
 
-  const timeMin = now.toISOString()
-  const timeMax = end.toISOString()
+  const timeMin = startDate.startOf('day').toISOString()
+  const timeMax = endDate.endOf('day').toISOString()
 
   const calendarId = process.env.GOOGLE_CALENDAR_ID!
 
-  // Zapytanie free/busy
   const response = await calendar.freebusy.query({
     requestBody: {
       timeMin,
@@ -46,38 +50,41 @@ export async function POST(req: NextRequest) {
 
   const busySlots = response.data.calendars?.[calendarId]?.busy || []
   const availableSlots: string[] = []
+  
+  let currentDate = startDate.clone()
 
-  const hours = [9, 10, 11, 12, 13, 14, 15, 16] // pełne godziny między 9 a 17
-  const daysChecked: Set<string> = new Set()
+  while (currentDate.isBefore(endDate.add(1, 'day')) && availableSlots.length < 5) {
+      // Tylko poniedziałek–piątek
+      if (currentDate.day() !== 0 && currentDate.day() !== 6) {
+          for (let hour = startTime; hour < endTime; hour++) {
+              for (let minute = 0; minute < 60; minute += 30) {
+                  const slotStart = currentDate.hour(hour).minute(minute).second(0)
+                  const slotEnd = slotStart.add(30, 'minutes') // Zakładamy spotkania 30 min, można zmienić
 
-  for (let i = 1; i < 7; i++) {
-    const day = now.add(i, 'day')
+                  // Sprawdzenie, czy jest w dozwolonym oknie czasowym
+                   if(slotStart.hour() >= startTime && slotEnd.hour() < endTime) {
 
-    // Tylko poniedziałek–piątek
-    if (day.day() === 0 || day.day() === 6) continue
+                      const isBusy = busySlots.some((busy) => {
+                          const busyStart = dayjs(busy.start!)
+                          const busyEnd = dayjs(busy.end!)
+                          return slotStart.isBefore(busyEnd) && slotEnd.isAfter(busyStart)
+                      })
 
-    for (const hour of hours) {
-      const start = day.hour(hour).minute(0).second(0)
-      const end = start.add(1, 'hour')
-
-      const isBusy = busySlots.some((slot) => {
-        const busyStart = dayjs(slot.start!)
-        const busyEnd = dayjs(slot.end!)
-        return start.isBefore(busyEnd) && end.isAfter(busyStart)
-      })
-
-      if (!isBusy && !daysChecked.has(day.format('YYYY-MM-DD'))) {
-        availableSlots.push(start.tz('Europe/Warsaw').format())
-        daysChecked.add(day.format('YYYY-MM-DD'))
-        break // tylko 1 termin dziennie
+                      if (!isBusy) {
+                          availableSlots.push(slotStart.tz('Europe/Warsaw').format())
+                          if (availableSlots.length >= 5) break;
+                      }
+                   }
+              }
+              if (availableSlots.length >= 5) break;
+          }
       }
-    }
-
-    if (availableSlots.length >= 3) break
+      currentDate = currentDate.add(1, 'day')
+      if (availableSlots.length >= 5) break;
   }
-
-  if (availableSlots.length < 3) {
-    return NextResponse.json({ slots: false })
+  
+  if(availableSlots.length === 0) {
+      return NextResponse.json({ slots: false, message: "No available slots found for the given criteria." })
   }
 
   return NextResponse.json({ slots: availableSlots })
