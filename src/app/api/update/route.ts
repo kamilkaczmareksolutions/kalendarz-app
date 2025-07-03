@@ -57,7 +57,7 @@ export async function POST(req: NextRequest) {
 		}
 
 		const eventId = listResponse.data.items[0].id!;
-		const start = dayjs(newDate).tz('Europe/Warsaw');
+        const start = dayjs.tz(newDate, 'Europe/Warsaw');
 		const end = start.add(1, 'hour');
 
 		const updatedEvent = await calendar.events.update({
