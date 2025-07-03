@@ -50,8 +50,8 @@ export async function POST(req: NextRequest) {
 		const endDate = now.add(8, 'days').endOf('day');
 
 		while (currentDate.isBefore(endDate) && availableSlots.length < 100) {
-			const workingHoursStart = currentDate.hour(10).minute(0).second(0);
-			const workingHoursEnd = currentDate.hour(18).minute(0).second(0);
+			const workingHoursStart = currentDate.hour(12).minute(0).second(0);
+			const workingHoursEnd = currentDate.hour(16).minute(0).second(0);
 
 			if (currentDate.day() !== 0 && currentDate.day() !== 6) {
 				let slotStart = workingHoursStart;
@@ -76,8 +76,8 @@ export async function POST(req: NextRequest) {
 		}
 
 		return NextResponse.json({
-			availableSlots: availableSlots.slice(0, 3),
-			version: '1.0.1',
+			availableSlots: availableSlots.slice(0, 5),
+			version: '1.0.2',
 		});
 	} catch (error) {
 		console.error('Error fetching free/busy times:', error);
