@@ -1,0 +1,88 @@
+import { google } from 'googleapis';
+import { NextRequest, NextResponse } from 'next/server';
+import dayjs from 'dayjs';
+import utc from 'dayjs/plugin/utc';
+import timezone from 'dayjs/plugin/timezone';
+
+dayjs.extend(utc);
+dayjs.extend(timezone);
+
+const SCOPES = [
+	'https://www.googleapis.com/auth/calendar',
+	'https://www.googleapis.com/auth/calendar.events',
+];
+
+export async function POST(req: NextRequest) {
+	const token = req.headers.get('x-webhook-token');
+	if (token !== process.env.WEBHOOK_SECRET) {
+		return NextResponse.json(
+			{ message: 'Forbidden – invalid token' },
+			{ status: 403 }
+		);
+	}
+
+	const body = await req.json();
+	const { id, newDate } = body;
+
+	if (!id || !newDate) {
+		return NextResponse.json(
+			{ message: 'Missing fields: id, newDate' },
+			{ status: 400 }
+		);
+	}
+
+	const calendarId = process.env.GOOGLE_CALENDAR_ID!;
+	const clientEmail = process.env.GOOGLE_CLIENT_EMAIL!;
+	const privateKey = process.env.GOOGLE_PRIVATE_KEY!.replace(/\\n/g, '\n');
+
+	const auth = new google.auth.JWT({
+		email: clientEmail,
+		key: privateKey,
+		scopes: SCOPES,
+	});
+
+	const calendar = google.calendar({ version: 'v3', auth });
+
+	try {
+		// Find event by ID in description
+		const listResponse = await calendar.events.list({
+			calendarId,
+			q: `Identyfikator wydarzenia: ${id}`,
+			timeMin: new Date(0).toISOString(), // Search all past and future
+			maxResults: 1,
+		});
+
+		if (!listResponse.data.items || listResponse.data.items.length === 0) {
+			return NextResponse.json({ updated: false, message: 'Event not found' }, { status: 404 });
+		}
+
+		const eventId = listResponse.data.items[0].id!;
+		const start = dayjs(newDate).tz('Europe/Warsaw');
+		const end = start.add(1, 'hour');
+
+		const updatedEvent = await calendar.events.update({
+			calendarId,
+			eventId,
+			requestBody: {
+				start: {
+					dateTime: start.format(),
+					timeZone: 'Europe/Warsaw',
+				},
+				end: {
+					dateTime: end.format(),
+					timeZone: 'Europe/Warsaw',
+				},
+			},
+		});
+
+		return NextResponse.json({
+			updated: true,
+			eventId: updatedEvent.data.id,
+			eventLink: updatedEvent.data.htmlLink,
+			version: '1.0.1',
+		});
+	} catch (error) {
+		console.error('Error updating event:', error);
+		return NextResponse.json({ message: 'Error updating event' }, { status: 500 });
+	}
+}
