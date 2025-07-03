@@ -57,14 +57,18 @@ export async function POST(req: NextRequest) {
 			return NextResponse.json({ updated: false, message: 'Event not found' }, { status: 404 });
 		}
 
-		const eventId = listResponse.data.items[0].id!;
-        const start = dayjs.tz(newDate, 'Europe/Warsaw');
+		const originalEvent = listResponse.data.items[0];
+		const eventId = originalEvent.id!;
+		const start = dayjs.tz(newDate, 'Europe/Warsaw');
 		const end = start.add(1, 'hour');
 
 		const updatedEvent = await calendar.events.update({
 			calendarId,
 			eventId,
 			requestBody: {
+				summary: originalEvent.summary,
+				description: originalEvent.description,
+				attendees: originalEvent.attendees,
 				start: {
 					dateTime: start.format(),
 					timeZone: 'Europe/Warsaw',
