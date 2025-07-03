@@ -55,7 +55,7 @@ export async function POST(req: NextRequest) {
 
 			if (currentDate.day() !== 0 && currentDate.day() !== 6) {
 				let slotStart = workingHoursStart;
-				while (slotStart.add(1, 'hour').isBefore(workingHoursEnd)) {
+				while (slotStart.isBefore(workingHoursEnd)) {
 					const slotEnd = slotStart.add(1, 'hour');
 					const isBusy = busySlots.some(
 						busy =>
@@ -69,7 +69,7 @@ export async function POST(req: NextRequest) {
 							end: slotEnd.toISOString(),
 						});
 					}
-					slotStart = slotStart.add(1, 'hour');
+					slotStart = slotStart.add(30, 'minutes');
 				}
 			}
 			currentDate = currentDate.add(1, 'day');
