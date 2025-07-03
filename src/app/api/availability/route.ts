@@ -26,6 +26,7 @@ export async function POST(req: NextRequest) {
 		email: clientEmail,
 		key: privateKey,
 		scopes: SCOPES,
+		subject: 'kamil.kaczmarek@lejki.pro',
 	});
 
 	const calendar = google.calendar({ version: 'v3', auth });
