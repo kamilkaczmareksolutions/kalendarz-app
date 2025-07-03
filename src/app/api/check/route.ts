@@ -35,7 +35,7 @@ export async function POST(req: NextRequest) {
 		const response = await calendar.events.list({
 			calendarId,
 			q: `Identyfikator wydarzenia: ${id}`,
-			timeMin: new Date().toISOString(),
+			timeMin: new Date(0).toISOString(),
 			maxResults: 1,
 			singleEvents: true,
 			orderBy: 'startTime',
