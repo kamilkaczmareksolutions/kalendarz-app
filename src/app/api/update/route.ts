@@ -45,12 +45,14 @@ export async function POST(req: NextRequest) {
 	const calendar = google.calendar({ version: 'v3', auth });
 
 	try {
-		// Find event by ID in description
+		// Find event by ID in description, only searching for future events
 		const listResponse = await calendar.events.list({
 			calendarId,
 			q: `Identyfikator wydarzenia: ${id}`,
-			timeMin: new Date(0).toISOString(), // Search all past and future
+			timeMin: dayjs().toISOString(), // Search from now onwards
 			maxResults: 1,
+			singleEvents: true,
+			orderBy: 'startTime'
 		});
 
 		if (!listResponse.data.items || listResponse.data.items.length === 0) {
@@ -60,7 +62,7 @@ export async function POST(req: NextRequest) {
 		const originalEvent = listResponse.data.items[0];
 		const eventId = originalEvent.id!;
 		const start = dayjs.tz(newDate, 'Europe/Warsaw');
-		const end = start.add(1, 'hour');
+		const end = start.add(30, 'minutes');
 
 		const updatedEvent = await calendar.events.update({
 			calendarId,

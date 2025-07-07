@@ -50,14 +50,15 @@ export async function POST(req: NextRequest) {
 		let currentDate = now.add(1, 'day').startOf('day');
 		const endDate = now.add(8, 'days').endOf('day');
 
-		while (currentDate.isBefore(endDate) && availableSlots.length < 100) {
+		while (currentDate.isBefore(endDate) && availableSlots.length < 5) {
 			const workingHoursStart = currentDate.hour(12).minute(0).second(0);
 			const workingHoursEnd = currentDate.hour(16).minute(0).second(0);
 
 			if (currentDate.day() !== 0 && currentDate.day() !== 6) {
 				let slotStart = workingHoursStart;
-				while (slotStart.isBefore(workingHoursEnd)) {
-					const slotEnd = slotStart.add(1, 'hour');
+				let foundSlotForDay = false;
+				while (slotStart.isBefore(workingHoursEnd) && !foundSlotForDay) {
+					const slotEnd = slotStart.add(30, 'minutes');
 					const isBusy = busySlots.some(
 						busy =>
 							dayjs(busy.start).isBefore(slotEnd) &&
@@ -69,6 +70,7 @@ export async function POST(req: NextRequest) {
 							start: slotStart.toISOString(),
 							end: slotEnd.toISOString(),
 						});
+						foundSlotForDay = true;
 					}
 					slotStart = slotStart.add(30, 'minutes');
 				}
@@ -77,8 +79,8 @@ export async function POST(req: NextRequest) {
 		}
 
 		return NextResponse.json({
-			availableSlots: availableSlots.slice(0, 5),
-			version: '1.0.2',
+			availableSlots: availableSlots,
+			version: '1.0.4-daily-slots',
 		});
 	} catch (error) {
 		console.error('Error fetching free/busy times:', error);
