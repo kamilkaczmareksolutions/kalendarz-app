@@ -18,6 +18,16 @@ export async function POST(req: NextRequest) {
 		);
 	}
 
+	const body = await req.json();
+	const { date } = body;
+
+	if (!date) {
+		return NextResponse.json(
+			{ message: 'Missing required fields: date' },
+			{ status: 400 }
+		);
+	}
+
 	const calendarId = process.env.GOOGLE_CALENDAR_ID!;
 	const clientEmail = process.env.GOOGLE_CLIENT_EMAIL!;
 	const privateKey = process.env.GOOGLE_PRIVATE_KEY!.replace(/\\n/g, '\n');
