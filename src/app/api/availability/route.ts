@@ -75,33 +75,38 @@ export async function POST(req: NextRequest) {
 			console.log('[AVAILABILITY] No busy slots returned from Google for this period.');
 		}
 		
-		const availableSlots: { day: string; slots: string[] }[] = [];
-		let currentDate = startOfMonth;
+		const availableSlots: string[] = [];
+		const now = dayjs.tz(undefined, 'Europe/Warsaw');
 
-		while (currentDate.isBefore(endOfMonth.add(1, 'day'))) {
-			const dayOfWeek = currentDate.day(); // Sunday is 0, Saturday is 6
-			const dayOfMonth = currentDate.format('YYYY-MM-DD');
+		let currentDay = now.clone();
+
+		while (currentDay.isBefore(endOfMonth) && availableSlots.length < 3) {
+			const dayOfWeek = currentDay.day();
 
 			if (dayOfWeek >= 1 && dayOfWeek <= 5) {
-				// Monday to Friday
-				const daySlots: string[] = [];
-				for (let hour = 12; hour < 16; hour++) {
-					const slot = currentDate.hour(hour).minute(0).second(0);
-					const isBusy = busySlots.some(
-						(busy) =>
-							dayjs(slot).isAfter(dayjs(busy.start)) &&
-							dayjs(slot).isBefore(dayjs(busy.end))
-					);
+				const startHour = 12;
+				const endHour = 16;
+
+				for (let hour = startHour; hour < endHour; hour++) {
+					const slot = currentDay.hour(hour).minute(0).second(0).millisecond(0);
+
+					// Skip slots that are in the past
+					if (slot.isBefore(now)) {
+						continue;
+					}
+
+					const isBusy = busySlots.some(busySlot => {
+						const busyStart = dayjs(busySlot.start);
+						const busyEnd = dayjs(busySlot.end);
+						return slot.isAfter(busyStart) && slot.isBefore(busyEnd);
+					});
 
 					if (!isBusy) {
-						daySlots.push(slot.format());
+						availableSlots.push(slot.format());
 					}
 				}
-				if (daySlots.length > 0) {
-					availableSlots.push({ day: dayOfMonth, slots: daySlots });
-				}
 			}
-			currentDate = currentDate.add(1, 'day');
+			currentDay = currentDay.add(1, 'day');
 		}
 
 		return NextResponse.json({ availableSlots, version: '1.0.1' });
