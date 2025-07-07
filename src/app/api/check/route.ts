@@ -28,33 +28,45 @@ export async function POST(req: NextRequest) {
 	const calendarId = process.env.GOOGLE_CALENDAR_ID!;
 	const clientEmail = process.env.GOOGLE_CLIENT_EMAIL!;
 	const privateKey = process.env.GOOGLE_PRIVATE_KEY!.replace(/\\n/g, '\n');
+	const impersonationEmail = process.env.GOOGLE_IMPERSONATION_EMAIL!;
 
-	const auth = new google.auth.JWT({
-		email: clientEmail,
-		key: privateKey,
+	const auth = new google.auth.GoogleAuth({
+		credentials: {
+			client_email: clientEmail,
+			private_key: privateKey,
+		},
 		scopes: SCOPES,
-		subject: 'kamil.kaczmarek@lejki.pro',
+		clientOptions: {
+			subject: impersonationEmail,
+		},
 	});
 
 	const calendar = google.calendar({ version: 'v3', auth });
-	const now = dayjs().toISOString();
 
 	try {
-		const listResponse = await calendar.events.list({
+		const now = dayjs.tz(undefined, 'Europe/Warsaw').toISOString();
+
+		const response = await calendar.events.list({
 			calendarId,
-			q: `Identyfikator wydarzenia: ${id}`,
 			timeMin: now,
-			maxResults: 1,
+			q: id,
 			singleEvents: true,
-			orderBy: 'startTime'
+			orderBy: 'startTime',
 		});
 
-		const eventExists = listResponse.data.items && listResponse.data.items.length > 0;
-
-		return NextResponse.json({ exists: eventExists, version: "1.0.0" });
-
+		if (response.data.items && response.data.items.length > 0) {
+			return NextResponse.json({
+				hasBooking: true,
+				event: response.data.items[0],
+			});
+		} else {
+			return NextResponse.json({ hasBooking: false });
+		}
 	} catch (error) {
-		console.error('Error checking event:', error);
-		return NextResponse.json({ message: 'Error checking event' }, { status: 500 });
+		console.error('Error checking for booking:', error);
+		return NextResponse.json(
+			{ message: 'An error occurred while checking for booking.' },
+			{ status: 500 }
+		);
 	}
 }

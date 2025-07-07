@@ -7,10 +7,7 @@ import timezone from 'dayjs/plugin/timezone';
 dayjs.extend(utc);
 dayjs.extend(timezone);
 
-const SCOPES = [
-	'https://www.googleapis.com/auth/calendar',
-	'https://www.googleapis.com/auth/calendar.events',
-];
+const SCOPES = ['https://www.googleapis.com/auth/calendar'];
 
 export async function POST(req: NextRequest) {
 	const token = req.headers.get('x-webhook-token');
@@ -22,87 +19,84 @@ export async function POST(req: NextRequest) {
 	}
 
 	const body = await req.json();
-	const { id, slot, name, phone, email } = body;
+	const { name, email, phone, slot } = body;
 
-	if (!id || !slot || !name || !phone || !email) {
+	if (!name || !email || !phone || !slot) {
 		return NextResponse.json(
-			{ message: 'Missing fields: id, slot, name, phone, email' },
+			{ message: 'Missing required fields: name, email, phone, slot' },
 			{ status: 400 }
 		);
 	}
 
-	const start = dayjs.tz(slot, 'Europe/Warsaw');
-	const end = start.add(30, 'minutes');
-
 	const calendarId = process.env.GOOGLE_CALENDAR_ID!;
 	const clientEmail = process.env.GOOGLE_CLIENT_EMAIL!;
 	const privateKey = process.env.GOOGLE_PRIVATE_KEY!.replace(/\\n/g, '\n');
+	const impersonationEmail = process.env.GOOGLE_IMPERSONATION_EMAIL!;
 
-	const calendar = google.calendar({
-		version: 'v3',
-		auth: new google.auth.JWT({
-			email: clientEmail,
-			key: privateKey,
-			scopes: SCOPES,
-			subject: 'kamil.kaczmarek@lejki.pro', // Optional: subject if needed
-		}),
-	});
-
-	const freeBusy = await calendar.freebusy.query({
-		requestBody: {
-			timeMin: start.toISOString(),
-			timeMax: end.toISOString(),
-			timeZone: 'Europe/Warsaw',
-			items: [{ id: calendarId }],
+	const auth = new google.auth.GoogleAuth({
+		credentials: {
+			client_email: clientEmail,
+			private_key: privateKey,
 		},
+		scopes: SCOPES,
+		clientOptions: {
+			subject: impersonationEmail,
+		}
 	});
 
-	const isBusy = freeBusy.data.calendars?.[calendarId]?.busy?.length ?? 0;
-	if (isBusy > 0) {
-		return NextResponse.json(
-			{ reserved: false, message: 'Slot is already taken' },
-			{ status: 409 }
-		);
-	}
-	const description = `Identyfikator wydarzenia: ${id}
-  Dane klienta:
-  Imię i nazwisko: ${name}
-  Telefon: ${phone}
-  E-mail: ${email}`;
+	const calendar = google.calendar({ version: 'v3', auth });
 
-	const event = await calendar.events.insert({
-		calendarId,
-		conferenceDataVersion: 1,
-		sendUpdates: 'all',
-		requestBody: {
-			summary: 'Spotkanie z klientem',
-			description,
+	try {
+		// NOTE: Logic to check for existing events has been intentionally removed.
+		// A new event will always be created upon request to allow multiple bookings.
+		const start = dayjs.tz(slot, 'Europe/Warsaw');
+		const end = start.add(30, 'minutes');
+
+		// Generate a unique ID for the event to allow for future updates
+		const uniqueId = Math.random().toString(36).substring(2, 15);
+
+		const event = {
+			summary: `Konsultacja zlec.ai - ${name}`,
+			description: `Imię i nazwisko: ${name}\nE-mail: ${email}\nTelefon: ${phone}\nIdentyfikator wydarzenia: ${uniqueId}`,
 			start: {
-				dateTime: start.format(),
+				dateTime: start.toISOString(),
 				timeZone: 'Europe/Warsaw',
 			},
 			end: {
-				dateTime: end.format(),
+				dateTime: end.toISOString(),
 				timeZone: 'Europe/Warsaw',
 			},
-			conferenceData: {
-				createRequest: {
-					requestId: `meet-${Date.now()}`,
-					conferenceSolutionKey: {
-						type: 'hangoutsMeet',
-					},
-				},
+			attendees: [{ email }],
+			reminders: {
+				useDefault: true,
 			},
-			attendees: [{ email: email }],
-		},
-	});
+		};
 
-	return NextResponse.json({
-		reserved: true,
-		start: start.format(),
-		end: end.format(),
-		eventId: event.data.id,
-		eventLink: event.data.htmlLink,
-		version: '1.0.3',
-	});
+		const createdEvent = await calendar.events.insert({
+			calendarId,
+			requestBody: event,
+			sendUpdates: 'all',
+		});
+
+		return NextResponse.json(
+			{
+				reserved: true,
+				message: 'Event created successfully',
+				event: {
+					id: uniqueId,
+					summary: createdEvent.data.summary,
+					start: createdEvent.data.start?.dateTime,
+					end: createdEvent.data.end?.dateTime,
+				},
+				version: '1.0.5',
+			},
+			{ status: 201 }
+		);
+	} catch (error) {
+		console.error('Error creating event:', error);
+		return NextResponse.json(
+			{ message: 'An error occurred while creating the event.' },
+			{ status: 500 }
+		);
+	}
 }

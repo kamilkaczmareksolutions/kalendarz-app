@@ -34,12 +34,17 @@ export async function POST(req: NextRequest) {
 	const calendarId = process.env.GOOGLE_CALENDAR_ID!;
 	const clientEmail = process.env.GOOGLE_CLIENT_EMAIL!;
 	const privateKey = process.env.GOOGLE_PRIVATE_KEY!.replace(/\\n/g, '\n');
+	const impersonationEmail = process.env.GOOGLE_IMPERSONATION_EMAIL!;
 
-	const auth = new google.auth.JWT({
-		email: clientEmail,
-		key: privateKey,
+	const auth = new google.auth.GoogleAuth({
+		credentials: {
+			client_email: clientEmail,
+			private_key: privateKey,
+		},
 		scopes: SCOPES,
-		subject: 'kamil.kaczmarek@lejki.pro',
+		clientOptions: {
+			subject: impersonationEmail,
+		},
 	});
 
 	const calendar = google.calendar({ version: 'v3', auth });
