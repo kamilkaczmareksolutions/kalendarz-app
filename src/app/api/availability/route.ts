@@ -51,8 +51,8 @@ export async function POST(req: NextRequest) {
 		const endDate = now.add(8, 'days').endOf('day');
 
 		while (currentDate.isBefore(endDate) && availableSlots.length < 5) {
-			const workingHoursStart = currentDate.hour(12).minute(0).second(0);
-			const workingHoursEnd = currentDate.hour(16).minute(0).second(0);
+			const workingHoursStart = currentDate.tz('Europe/Warsaw').hour(12).minute(0).second(0);
+			const workingHoursEnd = currentDate.tz('Europe/Warsaw').hour(16).minute(0).second(0);
 
 			if (currentDate.day() !== 0 && currentDate.day() !== 6) {
 				let slotStart = workingHoursStart;
