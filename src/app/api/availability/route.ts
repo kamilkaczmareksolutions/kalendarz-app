@@ -18,7 +18,11 @@ const SLOT_DURATION_MINUTES = 30;
 export async function POST(request: NextRequest) {
 	console.log('[AVAILABILITY] Received request to check availability.');
 	try {
-		const { startDate: requestedStartDate } = await request.json();
+		// Make the body parsing robust to handle cases where it might be empty
+		const bodyText = await request.text();
+		const body = bodyText ? JSON.parse(bodyText) : {};
+		const { startDate: requestedStartDate } = body;
+
 		console.log(`[AVAILABILITY] Requested start date: ${requestedStartDate}`);
 
 		const auth = getGoogleAuth();
