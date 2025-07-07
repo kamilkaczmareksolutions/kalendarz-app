@@ -70,54 +70,60 @@ export async function POST(req: NextRequest) {
 
 		console.log(`[UPDATE] Original organizer: ${organizer.email}`);
 		
-		// The main user (the one whose calendar we're operating on) might be different
-		// from the service account. Let's find the main attendee to impersonate.
-		const mainUserAttendee = event.attendees.find(
-			(attendee) => attendee.email === organizer.email
-		);
-
-		if (!mainUserAttendee) {
-			console.error('[UPDATE] Could not find organizer in the attendee list.');
-			return NextResponse.json({ error: 'Could not find organizer in the attendee list.' }, { status: 500 });
-		}
-
-		console.log(`[UPDATE] Found main user to impersonate: ${mainUserAttendee.email}`);
-
-		// Create a new auth client to impersonate the user
-		const userAuth = getGoogleAuth(mainUserAttendee.email);
-		const userCalendar = google.calendar({ version: 'v3', auth: userAuth });
-
-		const updatedEvent = {
+		// 1. Prepare the updated event data
+		const updatedEventData = {
 			summary: event.summary,
 			description: event.description,
 			attendees: event.attendees,
 			start: {
-				dateTime: dayjs.tz(newDate, 'Europe/Warsaw').format(),
+				dateTime: dayjs(newDate).tz('Europe/Warsaw').toISOString(),
 				timeZone: 'Europe/Warsaw',
 			},
 			end: {
-				dateTime: dayjs.tz(newDate, 'Europe/Warsaw').add(30, 'minutes').format(),
+				dateTime: dayjs(newDate).add(30, 'minutes').tz('Europe/Warsaw').toISOString(),
 				timeZone: 'Europe/Warsaw',
 			},
 		};
 
-		console.log('[UPDATE] Preparing to update event with new times:', updatedEvent);
-
-		const response = await userCalendar.events.update({
+		// 2. Update the event in the organizer's calendar first
+		console.log('[UPDATE] Updating event in organizer calendar...');
+		const organizerUpdateResponse = await calendar.events.update({
 			calendarId: 'primary',
 			eventId: eventId,
-			requestBody: updatedEvent,
+			requestBody: updatedEventData,
 			sendNotifications: true,
 		});
+		console.log('[UPDATE] Organizer calendar updated successfully.');
 
-		console.log('[UPDATE] Event updated successfully. Response from Google:', response.data);
+		// 3. Find the main attendee (not the organizer) to update their calendar
+		const mainUserAttendee = event.attendees?.find(
+			(attendee) => attendee.email !== event.organizer?.email
+		);
 
-		return NextResponse.json({
-			updated: true,
-			eventId: response.data.id,
-			eventLink: response.data.htmlLink,
-			version: '1.0.2',
-		});
+		// 4. If attendee exists, update their calendar via impersonation
+		if (mainUserAttendee && mainUserAttendee.email) {
+			console.log(`[UPDATE] Found main user: ${mainUserAttendee.email}. Now updating their event.`);
+			try {
+				const userAuth = getGoogleAuth(mainUserAttendee.email);
+				const userCalendar = google.calendar({ version: 'v3', auth: userAuth });
+
+				await userCalendar.events.update({
+					calendarId: 'primary',
+					eventId: eventId,
+					requestBody: updatedEventData,
+					sendNotifications: true,
+				});
+				console.log(`[UPDATE] Successfully updated event for attendee: ${mainUserAttendee.email}`);
+			} catch (impersonationError: any) {
+				console.error(`[UPDATE] Failed to update event for attendee ${mainUserAttendee.email}:`, impersonationError.message);
+				// Don't block success response if only the attendee update fails
+			}
+		} else {
+			console.log('[UPDATE] No other attendees found or attendee email is missing. Skipping attendee update.');
+		}
+
+		return NextResponse.json(organizerUpdateResponse.data);
+
 	} catch (error: any) {
 		console.error('[UPDATE] A critical error occurred:', error);
 		return NextResponse.json({ error: 'Failed to update event', details: error.message }, { status: 500 });
