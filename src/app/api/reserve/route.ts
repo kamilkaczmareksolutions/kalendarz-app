@@ -54,7 +54,7 @@ export async function POST(req: NextRequest) {
 	try {
 		// NOTE: Logic to check for existing events has been intentionally removed.
 		// A new event will always be created upon request to allow multiple bookings.
-		const start = dayjs.tz(slot, 'Europe/Warsaw');
+		const start = dayjs(slot);
 		const end = start.add(30, 'minutes');
 
 		// Generate a unique ID for the event to allow for future updates

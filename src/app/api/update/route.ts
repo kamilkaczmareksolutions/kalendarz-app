@@ -72,11 +72,11 @@ export async function POST(req: NextRequest) {
 			description: event.description,
 			attendees: event.attendees,
 			start: {
-				dateTime: dayjs(newDate).tz('Europe/Warsaw').toISOString(),
+				dateTime: dayjs(newDate).toISOString(),
 				timeZone: 'Europe/Warsaw',
 			},
 			end: {
-				dateTime: dayjs(newDate).add(30, 'minutes').tz('Europe/Warsaw').toISOString(),
+				dateTime: dayjs(newDate).add(30, 'minutes').toISOString(),
 				timeZone: 'Europe/Warsaw',
 			},
 		};
