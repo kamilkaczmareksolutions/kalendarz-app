@@ -41,19 +41,36 @@ export async function POST(req: NextRequest) {
 	const timeMax = now.add(8, 'days').endOf('day').toISOString();
 
 	try {
+		const startOfMonth = dayjs.tz(now, 'Europe/Warsaw').startOf('month');
+		const endOfMonth = dayjs.tz(now, 'Europe/Warsaw').endOf('month');
+
+		console.log(`[AVAILABILITY] Checking free/busy for calendar: ${calendarId}`);
+		console.log(`[AVAILABILITY] Range: ${startOfMonth.toISOString()} to ${endOfMonth.toISOString()}`);
+		console.log(`[AVAILABILITY] Impersonating: ${impersonationEmail}`);
+
 		const response = await calendar.freebusy.query({
 			requestBody: {
-				timeMin,
-				timeMax,
+				timeMin: startOfMonth.toISOString(),
+				timeMax: endOfMonth.toISOString(),
 				timeZone: 'Europe/Warsaw',
 				items: [{ id: calendarId }],
 			},
 		});
 
-		const busySlots = response.data.calendars?.[calendarId]?.busy ?? [];
+		const calendarBusyData = response.data.calendars?.[calendarId];
+		console.log('[AVAILABILITY] Raw free/busy response from Google:', JSON.stringify(calendarBusyData, null, 2));
+
+		const busySlots = calendarBusyData?.busy ?? [];
+
+		if (busySlots.length > 0) {
+			console.log(`[AVAILABILITY] Found ${busySlots.length} busy slots.`);
+		} else {
+			console.log('[AVAILABILITY] No busy slots returned from Google for this period.');
+		}
+
 		const availableSlots = [];
-		let currentDate = now.add(1, 'day').startOf('day');
-		const endDate = now.add(8, 'days').endOf('day');
+		let currentDate = startOfMonth;
+		const endDate = endOfMonth;
 
 		while (currentDate.isBefore(endDate) && availableSlots.length < 5) {
 			const workingHoursStart = currentDate.tz('Europe/Warsaw').hour(12).minute(0).second(0);
