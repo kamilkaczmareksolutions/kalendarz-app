@@ -18,10 +18,15 @@ export async function POST(req: NextRequest) {
 		);
 	}
 
+	console.log('[RESERVE] Received request. Processing...');
 	const body = await req.json();
+	console.log('[RESERVE] Raw request body:', JSON.stringify(body, null, 2));
+
 	const { name, email, phone, slot } = body;
+	console.log(`[RESERVE] Destructured data: name=${name}, email=${email}, phone=${phone}, slot=${slot}`);
 
 	if (!name || !email || !phone || !slot) {
+		console.error('[RESERVE] Validation failed: Missing required fields.');
 		return NextResponse.json(
 			{ message: 'Missing required fields: name, email, phone, slot' },
 			{ status: 400 }
