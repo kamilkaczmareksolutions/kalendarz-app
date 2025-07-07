@@ -10,6 +10,7 @@ dayjs.extend(timezone);
 const SCOPES = ['https://www.googleapis.com/auth/calendar.readonly'];
 
 export async function POST(req: NextRequest) {
+	console.log('[CHECK] Received request. Processing...');
 	const token = req.headers.get('x-webhook-token');
 	if (token !== process.env.WEBHOOK_SECRET) {
 		return NextResponse.json(
@@ -18,8 +19,11 @@ export async function POST(req: NextRequest) {
 		);
 	}
 
+	console.log('[CHECK] Token validated.');
 	const body = await req.json();
+	console.log('[CHECK] Raw request body:', JSON.stringify(body, null, 2));
 	const { id } = body;
+	console.log(`[CHECK] Destructured data: id=${id}`);
 
 	if (!id) {
 		return NextResponse.json({ message: 'Missing field: id' }, { status: 400 });
@@ -45,21 +49,27 @@ export async function POST(req: NextRequest) {
 
 	try {
 		const now = dayjs.tz(undefined, 'Europe/Warsaw').toISOString();
+		const searchQuery = `Identyfikator wydarzenia: ${id}`;
+		console.log(`[CHECK] Searching for event with query: "${searchQuery}"`);
 
 		const response = await calendar.events.list({
 			calendarId,
 			timeMin: now,
-			q: id,
+			q: searchQuery,
 			singleEvents: true,
 			orderBy: 'startTime',
 		});
 
+		console.log('[CHECK] Raw response from Google Calendar API:', JSON.stringify(response.data, null, 2));
+
 		if (response.data.items && response.data.items.length > 0) {
+			console.log('[CHECK] Event found.');
 			return NextResponse.json({
 				hasBooking: true,
 				event: response.data.items[0],
 			});
 		} else {
+			console.log('[CHECK] Event not found.');
 			return NextResponse.json({ hasBooking: false });
 		}
 	} catch (error) {
