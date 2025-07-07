@@ -8,11 +8,6 @@ import { getGoogleAuth } from '@/lib/google';
 dayjs.extend(utc);
 dayjs.extend(timezone);
 
-const SCOPES = [
-	'https://www.googleapis.com/auth/calendar',
-	'https://www.googleapis.com/auth/calendar.events',
-];
-
 export async function POST(req: NextRequest) {
 	console.log('[UPDATE] Received request to update event.');
 	try {
@@ -51,8 +46,9 @@ export async function POST(req: NextRequest) {
 			});
 			event = eventResponse.data;
 			console.log('[UPDATE] Successfully fetched event details.');
-		} catch (error: any) {
-			console.error('[UPDATE] Error fetching event:', error.message);
+		} catch (error: unknown) {
+			const message = error instanceof Error ? error.message : 'An unknown error occurred';
+			console.error('[UPDATE] Error fetching event:', message);
 			// If event not found, it might have been deleted or is invalid
 			return NextResponse.json({ error: 'Event not found or invalid ID.' }, { status: 404 });
 		}
@@ -114,8 +110,9 @@ export async function POST(req: NextRequest) {
 					sendNotifications: true,
 				});
 				console.log(`[UPDATE] Successfully updated event for attendee: ${mainUserAttendee.email}`);
-			} catch (impersonationError: any) {
-				console.error(`[UPDATE] Failed to update event for attendee ${mainUserAttendee.email}:`, impersonationError.message);
+			} catch (impersonationError: unknown) {
+				const message = impersonationError instanceof Error ? impersonationError.message : 'An unknown error occurred';
+				console.error(`[UPDATE] Failed to update event for attendee ${mainUserAttendee.email}:`, message);
 				// Don't block success response if only the attendee update fails
 			}
 		} else {
@@ -124,8 +121,9 @@ export async function POST(req: NextRequest) {
 
 		return NextResponse.json(organizerUpdateResponse.data);
 
-	} catch (error: any) {
+	} catch (error: unknown) {
+		const message = error instanceof Error ? error.message : 'An unknown error occurred';
 		console.error('[UPDATE] A critical error occurred:', error);
-		return NextResponse.json({ error: 'Failed to update event', details: error.message }, { status: 500 });
+		return NextResponse.json({ error: 'Failed to update event', details: message }, { status: 500 });
 	}
 }

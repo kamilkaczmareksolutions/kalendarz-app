@@ -83,8 +83,9 @@ export async function POST(request: NextRequest) {
 		console.log('[AVAILABILITY] Found available slots:', availableSlots);
 		return NextResponse.json({ slots: availableSlots });
 
-	} catch (error: any) {
+	} catch (error: unknown) {
+		const message = error instanceof Error ? error.message : 'An unknown error occurred';
 		console.error('[AVAILABILITY] A critical error occurred:', error);
-		return NextResponse.json({ error: 'Failed to get availability', details: error.message }, { status: 500 });
+		return NextResponse.json({ error: 'Failed to get availability', details: message }, { status: 500 });
 	}
 }

@@ -33,16 +33,17 @@ export async function POST(request: NextRequest) {
 				event: eventResponse.data,
 			});
 
-		} catch (error: any) {
-			if (error.code === 404) {
+		} catch (error: unknown) {
+			if (error && typeof error === 'object' && 'code' in error && (error as {code: number}).code === 404) {
 				console.log('[CHECK] Event not found in calendar.');
 				return NextResponse.json({ exists: false });
 			}
 			// Re-throw other errors
 			throw error;
 		}
-	} catch (error: any) {
+	} catch (error: unknown) {
+		const message = error instanceof Error ? error.message : 'An unknown error occurred';
 		console.error('[CHECK] A critical error occurred:', error);
-		return NextResponse.json({ error: 'Failed to check event', details: error.message }, { status: 500 });
+		return NextResponse.json({ error: 'Failed to check event', details: message }, { status: 500 });
 	}
 }
