@@ -3,118 +3,88 @@ import { NextRequest, NextResponse } from 'next/server';
 import dayjs from 'dayjs';
 import utc from 'dayjs/plugin/utc';
 import timezone from 'dayjs/plugin/timezone';
+import { getGoogleAuth } from '@/lib/google';
 
 dayjs.extend(utc);
 dayjs.extend(timezone);
+dayjs.tz.setDefault('Europe/Warsaw');
 
-const SCOPES = ['https://www.googleapis.com/auth/calendar.readonly'];
+const WORKING_HOURS = {
+	start: { hour: 9, minute: 0 },
+	end: { hour: 17, minute: 0 },
+};
+const SLOT_DURATION_MINUTES = 30;
 
-export async function POST(req: NextRequest) {
-	const token = req.headers.get('x-webhook-token');
-	if (token !== process.env.WEBHOOK_SECRET) {
-		return NextResponse.json(
-			{ message: 'Forbidden – invalid token' },
-			{ status: 403 }
-		);
-	}
-
-	const body = await req.json();
-	const { date } = body;
-
-	if (!date) {
-		return NextResponse.json(
-			{ message: 'Missing required fields: date' },
-			{ status: 400 }
-		);
-	}
-
-	const calendarId = process.env.GOOGLE_CALENDAR_ID!;
-	const clientEmail = process.env.GOOGLE_CLIENT_EMAIL!;
-	const privateKey = process.env.GOOGLE_PRIVATE_KEY!.replace(/\\n/g, '\n');
-	const impersonationEmail = process.env.GOOGLE_IMPERSONATION_EMAIL!;
-
-	const auth = new google.auth.GoogleAuth({
-		credentials: {
-			client_email: clientEmail,
-			private_key: privateKey,
-		},
-		scopes: SCOPES,
-		clientOptions: {
-			subject: impersonationEmail,
-		},
-	});
-
-	const calendar = google.calendar({ version: 'v3', auth });
-
+export async function POST(request: NextRequest) {
+	console.log('[AVAILABILITY] Received request to check availability.');
 	try {
-		const startOfMonth = dayjs.tz(date, 'Europe/Warsaw').startOf('month');
-		const endOfMonth = dayjs.tz(date, 'Europe/Warsaw').endOf('month');
+		const { startDate: requestedStartDate } = await request.json();
+		console.log(`[AVAILABILITY] Requested start date: ${requestedStartDate}`);
 
-		console.log(`[AVAILABILITY] Checking free/busy for calendar: ${calendarId}`);
-		console.log(`[AVAILABILITY] Range: ${startOfMonth.toISOString()} to ${endOfMonth.toISOString()}`);
-		console.log(`[AVAILABILITY] Impersonating: ${impersonationEmail}`);
+		const auth = getGoogleAuth();
+		const calendar = google.calendar({ version: 'v3', auth });
 
-		// Get busy times
+		const today = dayjs().startOf('day');
+		const startDate = requestedStartDate ? dayjs(requestedStartDate).startOf('day') : today;
+		
+		// Ensure we don't check for dates in the past, unless a specific future date is requested
+		const finalStartDate = startDate.isBefore(today) ? today : startDate;
+
+		const timeMin = finalStartDate.toISOString();
+		const timeMax = finalStartDate.add(1, 'month').endOf('month').toISOString();
+		
+		console.log(`[AVAILABILITY] Checking free/busy for calendar: ${process.env.GOOGLE_IMPERSONATION_EMAIL}`);
+		console.log(`[AVAILABILITY] Range: ${timeMin} to ${timeMax}`);
+		console.log(`[AVAILABILITY] Impersonating: ${process.env.GOOGLE_IMPERSONATION_EMAIL}`);
+
 		const freeBusyResponse = await calendar.freebusy.query({
 			requestBody: {
-				timeMin: startOfMonth.toISOString(),
-				timeMax: endOfMonth.toISOString(),
+				timeMin: timeMin,
+				timeMax: timeMax,
 				timeZone: 'Europe/Warsaw',
-				items: [{ id: calendarId }],
+				items: [{ id: 'primary' }],
 			},
 		});
 
-		const calendarBusyData = freeBusyResponse.data.calendars?.[calendarId];
-		console.log('[AVAILABILITY] Raw free/busy response from Google:', JSON.stringify(calendarBusyData, null, 2));
+		const busySlots = freeBusyResponse.data.calendars?.primary?.busy ?? [];
+		console.log('[AVAILABILITY] Raw free/busy response from Google:', JSON.stringify(busySlots, null, 2));
 
-		const busySlots = calendarBusyData?.busy ?? [];
+		const availableSlots = [];
+		let currentDate = finalStartDate;
 
-		if (busySlots.length > 0) {
-			console.log(`[AVAILABILITY] Found ${busySlots.length} busy slots.`);
-		} else {
-			console.log('[AVAILABILITY] No busy slots returned from Google for this period.');
-		}
-		
-		const availableSlots: string[] = [];
-		const searchStart = dayjs.tz(undefined, 'Europe/Warsaw').add(1, 'day').startOf('day');
+		while (availableSlots.length < 10 && currentDate.isBefore(dayjs(timeMax))) {
+			// Skip weekends
+			if (currentDate.day() !== 0 && currentDate.day() !== 6) {
+				const workingHoursStart = currentDate.hour(WORKING_HOURS.start.hour).minute(WORKING_HOURS.start.minute);
+				const workingHoursEnd = currentDate.hour(WORKING_HOURS.end.hour).minute(WORKING_HOURS.end.minute);
 
-		let currentDay = searchStart.clone();
+				let potentialSlot = workingHoursStart;
 
-		while (currentDay.isBefore(endOfMonth) && availableSlots.length < 3) {
-			const dayOfWeek = currentDay.day();
+				while (potentialSlot.add(SLOT_DURATION_MINUTES, 'minutes').isBefore(workingHoursEnd)) {
+					const slotEnd = potentialSlot.add(SLOT_DURATION_MINUTES, 'minutes');
 
-			if (dayOfWeek >= 1 && dayOfWeek <= 5) {
-				const startHour = 12;
-				const endHour = 16;
+					// Check if slot is in the future
+					if (potentialSlot.isAfter(dayjs())) {
+						const isBusy = busySlots.some(busy =>
+							dayjs(potentialSlot).isBefore(dayjs(busy.end)) && dayjs(slotEnd).isAfter(dayjs(busy.start))
+						);
 
-				for (let hour = startHour; hour < endHour; hour++) {
-					const slot = currentDay.hour(hour).minute(0).second(0).millisecond(0);
-
-					// Skip slots that are in the past
-					if (slot.isBefore(dayjs.tz(undefined, 'Europe/Warsaw'))) {
-						continue;
+						if (!isBusy) {
+							availableSlots.push(potentialSlot.toISOString());
+							if (availableSlots.length >= 10) break;
+						}
 					}
-
-					const isBusy = busySlots.some(busySlot => {
-						const busyStart = dayjs(busySlot.start);
-						const busyEnd = dayjs(busySlot.end);
-						return slot.isAfter(busyStart) && slot.isBefore(busyEnd);
-					});
-
-					if (!isBusy) {
-						availableSlots.push(slot.format());
-					}
+					potentialSlot = potentialSlot.add(SLOT_DURATION_MINUTES, 'minutes');
 				}
 			}
-			currentDay = currentDay.add(1, 'day');
+			currentDate = currentDate.add(1, 'day');
 		}
 
-		return NextResponse.json({ availableSlots, version: '1.0.1' });
-	} catch (error) {
-		console.error('Error fetching availability:', error);
-		return NextResponse.json(
-			{ message: 'An error occurred while fetching availability.' },
-			{ status: 500 }
-		);
+		console.log('[AVAILABILITY] Found available slots:', availableSlots);
+		return NextResponse.json({ slots: availableSlots });
+
+	} catch (error: any) {
+		console.error('[AVAILABILITY] A critical error occurred:', error);
+		return NextResponse.json({ error: 'Failed to get availability', details: error.message }, { status: 500 });
 	}
 }
