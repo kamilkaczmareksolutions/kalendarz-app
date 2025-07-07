@@ -76,9 +76,9 @@ export async function POST(req: NextRequest) {
 		}
 		
 		const availableSlots: string[] = [];
-		const now = dayjs.tz(undefined, 'Europe/Warsaw');
+		const searchStart = dayjs.tz(undefined, 'Europe/Warsaw').add(1, 'day').startOf('day');
 
-		let currentDay = now.clone();
+		let currentDay = searchStart.clone();
 
 		while (currentDay.isBefore(endOfMonth) && availableSlots.length < 3) {
 			const dayOfWeek = currentDay.day();
@@ -91,7 +91,7 @@ export async function POST(req: NextRequest) {
 					const slot = currentDay.hour(hour).minute(0).second(0).millisecond(0);
 
 					// Skip slots that are in the past
-					if (slot.isBefore(now)) {
+					if (slot.isBefore(dayjs.tz(undefined, 'Europe/Warsaw'))) {
 						continue;
 					}
 
