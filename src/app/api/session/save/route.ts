@@ -10,7 +10,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Missing psid or commentId' }, { status: 400 });
     }
 
-    saveSession(psid, commentId);
+    await saveSession(psid, commentId);
 
     return NextResponse.json({ success: true, message: `Session saved for psid: ${psid}` });
   } catch (error) {

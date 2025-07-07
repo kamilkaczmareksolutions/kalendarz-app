@@ -10,7 +10,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Missing psid' }, { status: 400 });
     }
 
-    const commentId = getAndClearSession(psid);
+    const commentId = await getAndClearSession(psid);
 
     if (!commentId) {
       return NextResponse.json({ error: 'Session not found or expired' }, { status: 404 });

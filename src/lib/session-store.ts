@@ -1,39 +1,40 @@
 // src/lib/session-store.ts
 
-interface SessionRecord {
-  commentId: string;
-  expiresAt: number;
+import { kv } from '@vercel/kv';
+
+const SESSION_TTL_SECONDS = 300; // Sesja będzie ważna przez 5 minut
+
+/**
+ * Zapisuje powiązanie PSID -> commentId w trwałej bazie danych Vercel KV.
+ * @param psid - Page-Scoped ID użytkownika z Messengera.
+ * @param commentId - Unikalne ID komentarza z Facebooka.
+ */
+export async function saveSession(psid: string, commentId: string): Promise<void> {
+  // Klucz sesji to PSID użytkownika
+  const key = `session:${psid}`;
+  // Zapisujemy ID komentarza z czasem wygaśnięcia (Time-To-Live)
+  await kv.set(key, commentId, { ex: SESSION_TTL_SECONDS });
+  console.log(`[KV Store] Session saved for key: ${key}`);
 }
 
-// This Map will act as our in-memory store.
-// A global variable in a module scope will persist across different serverless function invocations
-// within the same container instance. This is suitable for short-lived, non-critical data.
-const sessionStore = new Map<string, SessionRecord>();
+/**
+ * Odczytuje ID komentarza powiązane z danym PSID i natychmiast je usuwa,
+ * aby zapobiec ponownemu użyciu.
+ * @param psid - Page-Scoped ID użytkownika z Messengera.
+ * @returns - Zapisane ID komentarza lub null, jeśli sesja nie istnieje lub wygasła.
+ */
+export async function getAndClearSession(psid: string): Promise<string | null> {
+  const key = `session:${psid}`;
+  
+  // Pobieramy ID komentarza
+  const commentId = await kv.get<string>(key);
+  console.log(`[KV Store] Attempting to get session for key: ${key}. Found: ${commentId}`);
 
-const EXPIRATION_TIME_MS = 15 * 60 * 1000; // 15 minutes
-
-export function saveSession(psid: string, commentId: string) {
-  const expiresAt = Date.now() + EXPIRATION_TIME_MS;
-  sessionStore.set(psid, { commentId, expiresAt });
-  console.log(`[SessionStore] Saved session for PSID: ${psid}`);
-}
-
-export function getAndClearSession(psid: string): string | null {
-  const record = sessionStore.get(psid);
-
-  if (!record) {
-    console.log(`[SessionStore] No session found for PSID: ${psid}`);
-    return null;
+  if (commentId) {
+    // Jeśli sesja została znaleziona, usuwamy ją, aby uniknąć ponownego użycia.
+    await kv.del(key);
+    console.log(`[KV Store] Session cleared for key: ${key}.`);
   }
 
-  // Immediately delete the record to ensure it's used only once.
-  sessionStore.delete(psid);
-
-  if (Date.now() > record.expiresAt) {
-    console.log(`[SessionStore] Expired session found and deleted for PSID: ${psid}`);
-    return null;
-  }
-
-  console.log(`[SessionStore] Found and cleared session for PSID: ${psid}`);
-  return record.commentId;
+  return commentId;
 } 
