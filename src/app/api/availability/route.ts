@@ -45,20 +45,17 @@ export async function POST(req: NextRequest) {
 	});
 
 	const calendar = google.calendar({ version: 'v3', auth });
-	const now = dayjs().tz('Europe/Warsaw');
-
-	const timeMin = now.add(1, 'day').startOf('day').toISOString();
-	const timeMax = now.add(8, 'days').endOf('day').toISOString();
 
 	try {
-		const startOfMonth = dayjs.tz(now, 'Europe/Warsaw').startOf('month');
-		const endOfMonth = dayjs.tz(now, 'Europe/Warsaw').endOf('month');
+		const startOfMonth = dayjs.tz(date, 'Europe/Warsaw').startOf('month');
+		const endOfMonth = dayjs.tz(date, 'Europe/Warsaw').endOf('month');
 
 		console.log(`[AVAILABILITY] Checking free/busy for calendar: ${calendarId}`);
 		console.log(`[AVAILABILITY] Range: ${startOfMonth.toISOString()} to ${endOfMonth.toISOString()}`);
 		console.log(`[AVAILABILITY] Impersonating: ${impersonationEmail}`);
 
-		const response = await calendar.freebusy.query({
+		// Get busy times
+		const freeBusyResponse = await calendar.freebusy.query({
 			requestBody: {
 				timeMin: startOfMonth.toISOString(),
 				timeMax: endOfMonth.toISOString(),
@@ -67,7 +64,7 @@ export async function POST(req: NextRequest) {
 			},
 		});
 
-		const calendarBusyData = response.data.calendars?.[calendarId];
+		const calendarBusyData = freeBusyResponse.data.calendars?.[calendarId];
 		console.log('[AVAILABILITY] Raw free/busy response from Google:', JSON.stringify(calendarBusyData, null, 2));
 
 		const busySlots = calendarBusyData?.busy ?? [];
@@ -77,47 +74,41 @@ export async function POST(req: NextRequest) {
 		} else {
 			console.log('[AVAILABILITY] No busy slots returned from Google for this period.');
 		}
-
-		const availableSlots = [];
+		
+		const availableSlots: { day: string; slots: string[] }[] = [];
 		let currentDate = startOfMonth;
-		const endDate = endOfMonth;
 
-		while (currentDate.isBefore(endDate) && availableSlots.length < 5) {
-			const workingHoursStart = currentDate.tz('Europe/Warsaw').hour(12).minute(0).second(0);
-			const workingHoursEnd = currentDate.tz('Europe/Warsaw').hour(16).minute(0).second(0);
+		while (currentDate.isBefore(endOfMonth.add(1, 'day'))) {
+			const dayOfWeek = currentDate.day(); // Sunday is 0, Saturday is 6
+			const dayOfMonth = currentDate.format('YYYY-MM-DD');
 
-			if (currentDate.day() !== 0 && currentDate.day() !== 6) {
-				let slotStart = workingHoursStart;
-				let foundSlotForDay = false;
-				while (slotStart.isBefore(workingHoursEnd) && !foundSlotForDay) {
-					const slotEnd = slotStart.add(30, 'minutes');
+			if (dayOfWeek >= 1 && dayOfWeek <= 5) {
+				// Monday to Friday
+				const daySlots: string[] = [];
+				for (let hour = 12; hour < 16; hour++) {
+					const slot = currentDate.hour(hour).minute(0).second(0);
 					const isBusy = busySlots.some(
-						busy =>
-							dayjs(busy.start).isBefore(slotEnd) &&
-							dayjs(busy.end).isAfter(slotStart)
+						(busy) =>
+							dayjs(slot).isAfter(dayjs(busy.start)) &&
+							dayjs(slot).isBefore(dayjs(busy.end))
 					);
 
 					if (!isBusy) {
-						availableSlots.push({
-							start: slotStart.toISOString(),
-							end: slotEnd.toISOString(),
-						});
-						foundSlotForDay = true;
+						daySlots.push(slot.format());
 					}
-					slotStart = slotStart.add(30, 'minutes');
+				}
+				if (daySlots.length > 0) {
+					availableSlots.push({ day: dayOfMonth, slots: daySlots });
 				}
 			}
 			currentDate = currentDate.add(1, 'day');
 		}
 
-		return NextResponse.json({
-			availableSlots: availableSlots,
-			version: '1.0.4-daily-slots',
-		});
+		return NextResponse.json({ availableSlots, version: '1.0.1' });
 	} catch (error) {
-		console.error('Error fetching free/busy times:', error);
+		console.error('Error fetching availability:', error);
 		return NextResponse.json(
-			{ message: 'Error fetching availability' },
+			{ message: 'An error occurred while fetching availability.' },
 			{ status: 500 }
 		);
 	}
