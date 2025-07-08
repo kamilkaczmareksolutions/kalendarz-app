@@ -2,7 +2,7 @@ import { google } from 'googleapis';
 
 export function getGoogleAuth() {
   const privateKey = process.env.GOOGLE_PRIVATE_KEY?.replace(/\\n/g, '\n');
-  const clientEmail = process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL;
+  const clientEmail = process.env.GOOGLE_CLIENT_EMAIL;
   const impersonationEmail = process.env.GOOGLE_IMPERSONATION_EMAIL;
 
   if (!privateKey || !clientEmail || !impersonationEmail) {
