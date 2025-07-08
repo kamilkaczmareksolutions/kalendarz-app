@@ -28,11 +28,17 @@ export async function POST(request: NextRequest) {
 		const auth = getGoogleAuth();
 		const calendar = google.calendar({ version: 'v3', auth });
 
-		const today = dayjs().startOf('day');
-		const startDate = requestedStartDate ? dayjs(requestedStartDate).startOf('day') : today;
+		const tomorrow = dayjs().add(1, 'day').startOf('day');
 		
-		// Ensure we don't check for dates in the past, unless a specific future date is requested
-		const finalStartDate = startDate.isBefore(today) ? today : startDate;
+		// Start checking from the requested date, but default to tomorrow if no date is provided.
+		let startDate = requestedStartDate ? dayjs(requestedStartDate).startOf('day') : tomorrow;
+		
+		// Ensure the start date is not before tomorrow. This prevents same-day bookings.
+		if (startDate.isBefore(tomorrow)) {
+			startDate = tomorrow;
+		}
+		
+		const finalStartDate = startDate;
 
 		const timeMin = finalStartDate.toISOString();
 		const timeMax = finalStartDate.add(1, 'month').endOf('month').toISOString();
