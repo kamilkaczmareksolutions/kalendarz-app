@@ -5,6 +5,9 @@ const SESSION_TTL_SECONDS = 60 * 60 * 24 * 14;
 
 let redisClient: RedisClientType | null = null;
 
+// Definiujemy dedykowany typ dla danych sesji, aby unikać 'any' i spełnić wymagania lintera.
+export type SessionData = Record<string, unknown>;
+
 async function getRedisClient() {
   if (!process.env.REDIS_URL) {
     throw new Error('Missing environment variable REDIS_URL');
@@ -23,7 +26,7 @@ async function getRedisClient() {
  * @param psid Identyfikator użytkownika (klucz).
  * @param sessionData Obiekt z danymi sesji do zapisania.
  */
-export async function saveSession(psid: string, sessionData: Record<string, any>): Promise<void> {
+export async function saveSession(psid: string, sessionData: SessionData): Promise<void> {
   try {
     const client = await getRedisClient();
     const key = `session:${psid}`;
@@ -39,23 +42,21 @@ export async function saveSession(psid: string, sessionData: Record<string, any>
 /**
  * Pobiera obiekt danych sesji z Redis.
  * @param psid Identyfikator użytkownika (klucz).
- * @returns Obiekt z danymi sesji lub null, jeśli nie znaleziono.
+ * @returns Obiekt danych sesji lub null, jeśli nie istnieje.
  */
-export async function getSession(psid: string): Promise<Record<string, any> | null> {
+export async function getSession(psid: string): Promise<SessionData | null> {
   try {
     const client = await getRedisClient();
     const key = `session:${psid}`;
-    const sessionData = await client.get(key);
-    
-    if (sessionData) {
-      console.log(`[Redis Store] Session retrieved for key: ${key}`);
-      return JSON.parse(sessionData);
-    } else {
-      console.log(`[Redis Store] Session not found for key: ${key}`);
+    const value = await client.get(key);
+
+    if (!value) {
       return null;
     }
-  } catch (error) {
-    console.error('[Redis Get Error]', error);
+    
+    return JSON.parse(value) as SessionData;
+  } catch (err) {
+    console.error('[Redis Store] Error getting session:', err);
     return null;
   }
 }
