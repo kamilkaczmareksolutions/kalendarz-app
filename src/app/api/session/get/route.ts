@@ -13,16 +13,17 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Missing psid' }, { status: 400 });
     }
 
-    // Odczytaj sesję z bazy Redis (bez usuwania)
-    const commentId = await getSession(psid);
+    // Odczytaj obiekt sesji z bazy Redis (np. { "commentId": "123_456" })
+    const sessionData = await getSession(psid);
 
-    if (!commentId) {
+    if (!sessionData) {
       // To jest oczekiwane zachowanie, gdy sesja nie istnieje lub wygasła
       return NextResponse.json({ error: 'Session not found or expired' }, { status: 404 });
     }
 
-    // Zwróć znalezione ID komentarza
-    return NextResponse.json({ commentId });
+    // Zwróć znaleziony obiekt sesji bezpośrednio.
+    // Odpowiedź będzie miała postać: { "commentId": "123_456" }
+    return NextResponse.json(sessionData);
 
   } catch (error) {
     console.error('[API Get Error]', error);
