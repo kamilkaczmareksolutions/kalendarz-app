@@ -14,7 +14,7 @@ const WORKING_HOURS = {
   end: 16,
 };
 
-export async function GET(request: NextRequest) {
+export async function POST(request: NextRequest) {
   const serviceAccountAuth = new google.auth.JWT({
     email: process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL,
     key: process.env.GOOGLE_PRIVATE_KEY?.replace(/\\n/g, '\n'),
@@ -27,11 +27,11 @@ export async function GET(request: NextRequest) {
   });
 
   try {
-    const query = Object.fromEntries(request.nextUrl.searchParams);
-    const parsedQuery = availabilityQuerySchema.safeParse(query);
+    const body = await request.json();
+    const parsedQuery = availabilityQuerySchema.safeParse(body);
 
     if (!parsedQuery.success) {
-      return NextResponse.json({ error: 'Invalid query parameters', details: parsedQuery.error.flatten() }, { status: 400 });
+      return NextResponse.json({ error: 'Invalid body parameters', details: parsedQuery.error.flatten() }, { status: 400 });
     }
 
     const { startDate, endDate } = parsedQuery.data;
