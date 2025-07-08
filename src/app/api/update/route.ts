@@ -33,8 +33,9 @@ export async function POST(req: NextRequest) {
 		const auth = getGoogleAuth();
 		const calendar = google.calendar({ version: 'v3', auth });
 
-		const eventId = Buffer.from(id, 'base64').toString('ascii');
-		console.log(`[UPDATE] Decoded Event ID: ${eventId}`);
+		// ID wydarzenia jest już w prawidłowym formacie, nie ma potrzeby dekodowania.
+		const eventId = id;
+		console.log(`[UPDATE] Using Event ID as is: ${eventId}`);
 
 		// Fetch the existing event to get details like attendees
 		let event;

@@ -23,14 +23,21 @@ async function getRedisClient() {
 }
 
 /**
- * Zapisuje powiązanie PSID -> commentId w bazie danych Redis.
+ * Zapisuje ID komentarza w sesji dla danego PSID.
+ * Jeśli sesja już istnieje, zostanie nadpisana.
  */
 export async function saveSession(psid: string, commentId: string): Promise<void> {
   try {
     const client = await getRedisClient();
     const key = `session:${psid}`;
-    await client.set(key, commentId, { EX: SESSION_TTL_SECONDS });
-    console.log(`[Redis Store] Session saved for key: ${key}`);
+    const twoWeeksInSeconds = 14 * 24 * 60 * 60; // 1209600
+
+    // Zapisz sesję z czasem wygaśnięcia (TTL) ustawionym na 2 tygodnie
+    await client.set(key, commentId, {
+      EX: twoWeeksInSeconds,
+    });
+
+    console.log(`[Redis Store] Session saved for key: ${key} with TTL of 2 weeks.`);
   } catch (error) {
     console.error('[Redis Save Error]', error);
   }
