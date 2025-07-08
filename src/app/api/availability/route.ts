@@ -1,102 +1,82 @@
-import dayjs from 'dayjs';
-import utc from 'dayjs/plugin/utc';
-import timezone from 'dayjs/plugin/timezone';
-import isSameOrAfter from 'dayjs/plugin/isSameOrAfter';
-import { google } from 'googleapis';
 import { NextRequest, NextResponse } from 'next/server';
-import { getGoogleAuth } from '@/lib/google';
+import { google } from 'googleapis';
+import { dayjs } from '@/lib/dayjs';
+import { z } from 'zod';
 
-dayjs.extend(utc);
-dayjs.extend(timezone);
-dayjs.extend(isSameOrAfter);
+// Uproszczony schemat walidacji - oczekujemy teraz na daty z n8n
+const availabilityQuerySchema = z.object({
+  startDate: z.string().transform((str) => dayjs(str).startOf('day')),
+  endDate: z.string().transform((str) => dayjs(str).endOf('day')),
+});
 
-export const runtime = 'nodejs';
+const WORKING_HOURS = {
+  start: 12,
+  end: 16,
+};
 
-// --- Konfiguracja ---
-const TIME_ZONE = 'Europe/Warsaw';
-const WORKING_HOURS = { start: 12, end: 16 };
-const SLOT_DURATION = 30; // w minutach
-const MAX_DAYS_TO_CHECK = 14; // Maksymalny horyzont czasowy wyszukiwania
-// --- Koniec Konfiguracji ---
+export async function GET(request: NextRequest) {
+  const serviceAccountAuth = new google.auth.JWT({
+    email: process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL,
+    key: process.env.GOOGLE_PRIVATE_KEY?.replace(/\\n/g, '\n'),
+    scopes: ['https://www.googleapis.com/auth/calendar.events.readonly'],
+  });
 
-export async function POST(req: NextRequest) {
-    console.log('[AVAILABILITY] Received request to check availability.');
+  const calendar = google.calendar({
+    version: 'v3',
+    auth: serviceAccountAuth,
+  });
 
-    try {
-        const body = await req.json().catch(() => ({}));
-        let startDate = dayjs.tz(body.date || new Date(), TIME_ZONE);
+  try {
+    const query = Object.fromEntries(request.nextUrl.searchParams);
+    const parsedQuery = availabilityQuerySchema.safeParse(query);
 
-        console.log(`[AVAILABILITY] Initial date from request (or now): ${startDate.format()}`);
-        
-        // Nigdy nie proponuj spotkań na dziś. Zawsze zaczynaj od jutra.
-        const tomorrow = dayjs().tz(TIME_ZONE).add(1, 'day').startOf('day');
-        if (startDate.isBefore(tomorrow)) {
-            startDate = tomorrow;
-            console.log(`[AVAILABILITY] Start date was before tomorrow. Reset to tomorrow: ${startDate.format()}`);
-        }
-
-        const auth = getGoogleAuth();
-        const calendar = google.calendar({ version: 'v3', auth });
-
-        const timeMin = startDate.toISOString();
-        const timeMax = startDate.add(MAX_DAYS_TO_CHECK, 'day').endOf('day').toISOString();
-
-        console.log(`[AVAILABILITY] Checking calendar from: ${timeMin} to: ${timeMax}`);
-
-        const calendarResponse = await calendar.events.list({
-            calendarId: 'primary',
-            timeMin: timeMin,
-            timeMax: timeMax,
-            singleEvents: true,
-            orderBy: 'startTime',
-        });
-
-        const busySlots = calendarResponse.data.items?.map(event => ({
-            start: dayjs(event.start?.dateTime),
-            end: dayjs(event.end?.dateTime),
-        })) || [];
-
-        console.log(`[AVAILABILITY] Found ${busySlots.length} busy slots in the given range.`);
-
-        const availableSlots = [];
-        let currentDay = startDate.clone();
-
-        for (let i = 0; i < MAX_DAYS_TO_CHECK; i++) {
-            // Pomiń weekendy
-            if (currentDay.day() !== 0 && currentDay.day() !== 6) {
-                let slot = currentDay.hour(WORKING_HOURS.start).minute(0).second(0);
-            
-                while (slot.hour() < WORKING_HOURS.end) {
-                    const slotEnd = slot.add(SLOT_DURATION, 'minutes');
-    
-                    const isBooked = busySlots.some(busySlot => 
-                        (slot.isSame(busySlot.start) || slot.isAfter(busySlot.start)) && slot.isBefore(busySlot.end)
-                    );
-    
-                    if (!isBooked) {
-                        availableSlots.push(slot.toISOString());
-                    }
-                    
-                    slot = slotEnd;
-                }
-            }
-            
-            if(availableSlots.length >= 5) {
-                break;
-            }
-
-            currentDay = currentDay.add(1, 'day');
-        }
-        
-        console.log(`[AVAILABILITY] Found ${availableSlots.length} available slots.`);
-
-        return NextResponse.json(
-            { availableSlots: availableSlots.slice(0, 5) },
-            { status: 200 }
-        );
-
-    } catch (error) {
-        console.error('Error checking availability:', error);
-        return NextResponse.json({ error: 'Failed to check availability.' }, { status: 500 });
+    if (!parsedQuery.success) {
+      return NextResponse.json({ error: 'Invalid query parameters', details: parsedQuery.error.flatten() }, { status: 400 });
     }
+
+    const { startDate, endDate } = parsedQuery.data;
+
+    // Pobierz wszystkie zajęte terminy w podanym przez n8n zakresie
+    const calendarResponse = await calendar.events.list({
+      calendarId: process.env.GOOGLE_CALENDAR_ID,
+      timeMin: startDate.toISOString(),
+      timeMax: endDate.toISOString(),
+      singleEvents: true,
+      orderBy: 'startTime',
+    });
+
+    const busySlots = calendarResponse.data.items?.map(event => ({
+      start: dayjs(event.start?.dateTime),
+      end: dayjs(event.end?.dateTime),
+    })) ?? [];
+
+    const availableSlots: { time: string; isAvailable: boolean }[] = [];
+    let currentDate = startDate.clone();
+
+    while (currentDate.isBefore(endDate) || currentDate.isSame(endDate, 'day')) {
+      // Pomiń weekendy
+      if (currentDate.day() !== 0 && currentDate.day() !== 6) {
+        for (let hour = WORKING_HOURS.start; hour < WORKING_HOURS.end; hour++) {
+          const slotTime = currentDate.set('hour', hour).startOf('hour');
+          
+          const isSlotBooked = busySlots.some(busySlot =>
+            slotTime.isBetween(busySlot.start, busySlot.end, null, '[)')
+          );
+
+          if (!isSlotBooked && slotTime.isAfter(dayjs())) {
+            availableSlots.push({
+              time: slotTime.toISOString(),
+              isAvailable: true,
+            });
+          }
+        }
+      }
+      currentDate = currentDate.add(1, 'day');
+    }
+
+    return NextResponse.json({ availableSlots });
+  } catch (error) {
+    console.error('Error fetching availability:', error);
+    return NextResponse.json({ error: 'Failed to fetch availability' }, { status: 500 });
+  }
 }
