@@ -20,12 +20,12 @@ const SLOT_DURATION_MINUTES = 30;
 export async function POST(request: NextRequest) {
 	console.log('[AVAILABILITY] Received request to check availability.');
 	try {
-		// Make the body parsing robust to handle cases where it might be empty
-		const bodyText = await request.text();
-		const body = bodyText ? JSON.parse(bodyText) : {};
+		// We must consume the request body for the POST request to complete,
+		// but we will deliberately ignore its contents to enforce our own business logic.
+		await request.text();
+
 		// Even if a start date is requested, we ignore it for now to enforce our logic.
 		// The primary goal is to ensure we always start from a clean, reliable point.
-
 		console.log(`[AVAILABILITY] Ignoring any requested start date to enforce business logic.`);
 
 		const auth = getGoogleAuth();
