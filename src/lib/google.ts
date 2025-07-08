@@ -14,7 +14,7 @@ export function getGoogleAuth() {
   const auth = new google.auth.JWT({
     email: clientEmail,
     key: privateKey,
-    scopes: ['https://www.googleapis.com/auth/calendar.events.readonly'],
+    scopes: ['https://www.googleapis.com/auth/calendar.events'],
     subject: impersonationEmail,
   });
 
