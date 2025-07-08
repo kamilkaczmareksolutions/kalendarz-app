@@ -1,102 +1,102 @@
-import { google } from 'googleapis';
-import { NextRequest, NextResponse } from 'next/server';
 import dayjs from 'dayjs';
 import utc from 'dayjs/plugin/utc';
 import timezone from 'dayjs/plugin/timezone';
+import isSameOrAfter from 'dayjs/plugin/isSameOrAfter';
+import { google } from 'googleapis';
+import { NextRequest, NextResponse } from 'next/server';
 import { getGoogleAuth } from '@/lib/google';
 
 dayjs.extend(utc);
 dayjs.extend(timezone);
+dayjs.extend(isSameOrAfter);
 
-const TIMEZONE = 'Europe/Warsaw';
-dayjs.tz.setDefault(TIMEZONE);
+export const runtime = 'nodejs';
 
-const WORKING_HOURS = {
-	start: { hour: 12, minute: 0 },
-	end: { hour: 16, minute: 0 },
-};
-const SLOT_DURATION_MINUTES = 30;
+// --- Konfiguracja ---
+const TIME_ZONE = 'Europe/Warsaw';
+const WORKING_HOURS = { start: 12, end: 16 };
+const SLOT_DURATION = 30; // w minutach
+const MAX_DAYS_TO_CHECK = 14; // Maksymalny horyzont czasowy wyszukiwania
+// --- Koniec Konfiguracji ---
 
-export async function POST(request: NextRequest) {
-	console.log('[AVAILABILITY] Received request to check availability.');
-	try {
-		// We must consume the request body for the POST request to complete,
-		// but we will deliberately ignore its contents to enforce our own business logic.
-		await request.text();
+export async function POST(req: NextRequest) {
+    console.log('[AVAILABILITY] Received request to check availability.');
 
-		// Even if a start date is requested, we ignore it for now to enforce our logic.
-		// The primary goal is to ensure we always start from a clean, reliable point.
-		console.log(`[AVAILABILITY] Ignoring any requested start date to enforce business logic.`);
+    try {
+        const body = await req.json().catch(() => ({}));
+        let startDate = dayjs.tz(body.date || new Date(), TIME_ZONE);
 
-		const auth = getGoogleAuth();
-		const calendar = google.calendar({ version: 'v3', auth });
-		
-		// --- START OF CRITICAL CHANGE ---
-		// The root cause of the bug was inconsistent timezone handling.
-		// We are now explicitly setting the start for our search to be the
-		// beginning of *tomorrow* in the Polish timezone. This removes all ambiguity.
-		const searchStartDate = dayjs.tz(new Date(), TIMEZONE).add(1, 'day').startOf('day');
-		// --- END OF CRITICAL CHANGE ---
+        console.log(`[AVAILABILITY] Initial date from request (or now): ${startDate.format()}`);
+        
+        // Nigdy nie proponuj spotkań na dziś. Zawsze zaczynaj od jutra.
+        const tomorrow = dayjs.tz(TIME_ZONE).add(1, 'day').startOf('day');
+        if (startDate.isBefore(tomorrow)) {
+            startDate = tomorrow;
+            console.log(`[AVAILABILITY] Start date was before tomorrow. Reset to tomorrow: ${startDate.format()}`);
+        }
 
-		const timeMin = searchStartDate.toISOString();
-		// We search a 1-month window from our calculated start date.
-		const timeMax = searchStartDate.add(1, 'month').endOf('month').toISOString();
-		
-		console.log(`[AVAILABILITY] Checking free/busy for calendar: ${process.env.GOOGLE_IMPERSONATION_EMAIL}`);
-		console.log(`[AVAILABILITY] Search starts from (UTC): ${timeMin}`);
-		console.log(`[AVAILABILITY] Search ends at (UTC): ${timeMax}`);
-		console.log(`[AVAILABILITY] Impersonating: ${process.env.GOOGLE_IMPERSONATION_EMAIL}`);
+        const auth = getGoogleAuth();
+        const calendar = google.calendar({ version: 'v3', auth });
 
-		const freeBusyResponse = await calendar.freebusy.query({
-			requestBody: {
-				timeMin: timeMin,
-				timeMax: timeMax,
-				timeZone: TIMEZONE,
-				items: [{ id: 'primary' }],
-			},
-		});
+        const timeMin = startDate.toISOString();
+        const timeMax = startDate.add(MAX_DAYS_TO_CHECK, 'day').endOf('day').toISOString();
 
-		const busySlots = freeBusyResponse.data.calendars?.primary?.busy ?? [];
-		console.log('[AVAILABILITY] Raw free/busy response from Google:', JSON.stringify(busySlots, null, 2));
+        console.log(`[AVAILABILITY] Checking calendar from: ${timeMin} to: ${timeMax}`);
 
-		const availableSlots = [];
-		// Start the loop from our reliable, calculated start date.
-		let currentDate = searchStartDate;
+        const calendarResponse = await calendar.events.list({
+            calendarId: 'primary',
+            timeMin: timeMin,
+            timeMax: timeMax,
+            singleEvents: true,
+            orderBy: 'startTime',
+        });
 
-		while (availableSlots.length < 10 && currentDate.isBefore(dayjs(timeMax))) {
-			// Skip weekends
-			if (currentDate.day() !== 0 && currentDate.day() !== 6) {
-				const workingHoursStart = currentDate.hour(WORKING_HOURS.start.hour).minute(WORKING_HOURS.start.minute);
-				const workingHoursEnd = currentDate.hour(WORKING_HOURS.end.hour).minute(WORKING_HOURS.end.minute);
+        const busySlots = calendarResponse.data.items?.map(event => ({
+            start: dayjs(event.start?.dateTime),
+            end: dayjs(event.end?.dateTime),
+        })) || [];
 
-				let potentialSlot = workingHoursStart;
+        console.log(`[AVAILABILITY] Found ${busySlots.length} busy slots in the given range.`);
 
-				while (potentialSlot.add(SLOT_DURATION_MINUTES, 'minutes').isBefore(workingHoursEnd)) {
-					const slotEnd = potentialSlot.add(SLOT_DURATION_MINUTES, 'minutes');
+        const availableSlots = [];
+        let currentDay = startDate.clone();
 
-					// Check if slot is in the future (compared against now in the correct timezone)
-					if (potentialSlot.isAfter(dayjs.tz(new Date(), TIMEZONE))) {
-						const isBusy = busySlots.some(busy =>
-							dayjs(potentialSlot).isBefore(dayjs(busy.end)) && dayjs(slotEnd).isAfter(dayjs(busy.start))
-						);
+        for (let i = 0; i < MAX_DAYS_TO_CHECK; i++) {
+            // Pomiń weekendy
+            if (currentDay.day() !== 0 && currentDay.day() !== 6) {
+                let slot = currentDay.hour(WORKING_HOURS.start).minute(0).second(0);
+            
+                while (slot.hour() < WORKING_HOURS.end) {
+                    const slotEnd = slot.add(SLOT_DURATION, 'minutes');
+    
+                    const isBooked = busySlots.some(busySlot => 
+                        (slot.isSame(busySlot.start) || slot.isAfter(busySlot.start)) && slot.isBefore(busySlot.end)
+                    );
+    
+                    if (!isBooked) {
+                        availableSlots.push(slot.toISOString());
+                    }
+                    
+                    slot = slotEnd;
+                }
+            }
+            
+            if(availableSlots.length >= 5) {
+                break;
+            }
 
-						if (!isBusy) {
-							availableSlots.push(potentialSlot.toISOString());
-							if (availableSlots.length >= 10) break;
-						}
-					}
-					potentialSlot = potentialSlot.add(SLOT_DURATION_MINUTES, 'minutes');
-				}
-			}
-			currentDate = currentDate.add(1, 'day').startOf('day');
-		}
+            currentDay = currentDay.add(1, 'day');
+        }
+        
+        console.log(`[AVAILABILITY] Found ${availableSlots.length} available slots.`);
 
-		console.log('[AVAILABILITY] Found available slots:', availableSlots);
-		return NextResponse.json({ slots: availableSlots });
+        return NextResponse.json(
+            { availableSlots: availableSlots.slice(0, 5) },
+            { status: 200 }
+        );
 
-	} catch (error: unknown) {
-		const message = error instanceof Error ? error.message : 'An unknown error occurred';
-		console.error('[AVAILABILITY] A critical error occurred:', error);
-		return NextResponse.json({ error: 'Failed to get availability', details: message }, { status: 500 });
-	}
+    } catch (error) {
+        console.error('Error checking availability:', error);
+        return NextResponse.json({ error: 'Failed to check availability.' }, { status: 500 });
+    }
 }

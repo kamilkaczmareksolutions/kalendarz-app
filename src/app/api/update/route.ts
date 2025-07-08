@@ -27,10 +27,10 @@ export async function POST(req: NextRequest) {
 		const body = await req.json();
 		console.log('[UPDATE] Raw request body:', JSON.stringify(body, null, 2));
 		const { id, newDate } = body;
-		console.log(`[UPDATE] Request body validated. Event ID: ${id}, New Date: ${newDate}`);
+		console.log(`[UPDATE] Destructured data: id=${id}, newDate=${newDate}`);
 
 		if (!id || !newDate) {
-			console.log('[UPDATE] Validation failed: Missing id or newDate.');
+			console.error('[UPDATE] Validation failed: Missing id or newDate.');
 			return NextResponse.json({ error: 'Missing id or newDate' }, { status: 400 });
 		}
 

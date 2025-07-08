@@ -7,12 +7,13 @@ export const runtime = 'nodejs'; // Force Node.js runtime for compatibility with
 export async function POST(request: NextRequest) {
 	console.log('[CHECK] Received request to check event.');
 	try {
-		const { id } = await request.json();
-
-		console.log(`[CHECK] Request body validated. Event ID: ${id}`);
+		const body = await request.json();
+		console.log('[CHECK] Raw request body:', JSON.stringify(body, null, 2));
+		const { id } = body;
+		console.log(`[CHECK] Destructured data: id=${id}`);
 
 		if (!id) {
-			console.log('[CHECK] Validation failed: Missing id.');
+			console.error('[CHECK] Validation failed: Missing id.');
 			return NextResponse.json({ error: 'Missing id' }, { status: 400 });
 		}
 
