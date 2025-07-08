@@ -8,6 +8,10 @@ import { getGoogleAuth } from '@/lib/google';
 dayjs.extend(utc);
 dayjs.extend(timezone);
 
+// This comment is added to force a redeployment on Vercel
+// to resolve a potential caching or build issue causing a 404 error.
+export const runtime = 'nodejs'; // Force Node.js runtime for compatibility with Google APIs
+
 export async function POST(req: NextRequest) {
 	console.log('[UPDATE] Received request to update event.');
 	try {
@@ -33,7 +37,7 @@ export async function POST(req: NextRequest) {
 		const auth = getGoogleAuth();
 		const calendar = google.calendar({ version: 'v3', auth });
 
-		// ID wydarzenia jest już w prawidłowym formacie, nie ma potrzeby dekodowania.
+		// ID wydarzenia jest używane bezpośrednio, bez dekodowania.
 		const eventId = id;
 		console.log(`[UPDATE] Using Event ID as is: ${eventId}`);
 

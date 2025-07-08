@@ -2,6 +2,8 @@ import { google } from 'googleapis';
 import { NextRequest, NextResponse } from 'next/server';
 import { getGoogleAuth } from '@/lib/google';
 
+export const runtime = 'nodejs'; // Force Node.js runtime for compatibility with Google APIs
+
 export async function POST(request: NextRequest) {
 	console.log('[CHECK] Received request to check event.');
 	try {
@@ -18,8 +20,8 @@ export async function POST(request: NextRequest) {
 		const calendar = google.calendar({ version: 'v3', auth });
 
 		try {
-			const eventId = Buffer.from(id, 'base64').toString('ascii');
-			console.log(`[CHECK] Decoded Event ID: ${eventId}`);
+			const eventId = id; // Używamy ID bezpośrednio, bez dekodowania
+			console.log(`[CHECK] Using Event ID as is: ${eventId}`);
 			
 			console.log(`[CHECK] Fetching event with ID: ${eventId}`);
 			const eventResponse = await calendar.events.get({
