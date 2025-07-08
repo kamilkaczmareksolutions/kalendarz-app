@@ -10,8 +10,8 @@ dayjs.extend(timezone);
 dayjs.tz.setDefault('Europe/Warsaw');
 
 const WORKING_HOURS = {
-	start: { hour: 9, minute: 0 },
-	end: { hour: 17, minute: 0 },
+	start: { hour: 12, minute: 0 },
+	end: { hour: 16, minute: 0 },
 };
 const SLOT_DURATION_MINUTES = 30;
 
@@ -81,7 +81,7 @@ export async function POST(request: NextRequest) {
 					potentialSlot = potentialSlot.add(SLOT_DURATION_MINUTES, 'minutes');
 				}
 			}
-			currentDate = currentDate.add(1, 'day');
+			currentDate = currentDate.add(1, 'day').startOf('day');
 		}
 
 		console.log('[AVAILABILITY] Found available slots:', availableSlots);

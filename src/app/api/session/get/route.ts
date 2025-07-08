@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { getAndClearSession } from '../../../../lib/session-store';
+import { getSession } from '../../../../lib/session-store';
 
 // TA LINIA JEST KLUCZOWA - ZMUSZA VERCEL DO UŻYWANIA ŚRODOWISKA NODE.JS
 export const runtime = 'nodejs';
@@ -13,8 +13,8 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Missing psid' }, { status: 400 });
     }
 
-    // Odczytaj i usuń sesję z bazy Redis
-    const commentId = await getAndClearSession(psid);
+    // Odczytaj sesję z bazy Redis (bez usuwania)
+    const commentId = await getSession(psid);
 
     if (!commentId) {
       // To jest oczekiwane zachowanie, gdy sesja nie istnieje lub wygasła

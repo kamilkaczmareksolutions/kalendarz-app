@@ -59,3 +59,27 @@ export async function getAndClearSession(psid: string): Promise<string | null> {
     return null;
   }
 }
+
+/**
+ * Odczytuje ID komentarza dla danego PSID bez usuwania go z sesji.
+ */
+export async function getSession(psid: string): Promise<string | null> {
+  try {
+    const client = await getRedisClient();
+    const key = `session:${psid}`;
+    
+    // Tylko pobierz, bez usuwania
+    const commentId = await client.get(key);
+    
+    if (commentId) {
+      console.log(`[Redis Store] Session retrieved for key: ${key}`);
+    } else {
+      console.log(`[Redis Store] Session not found for key: ${key}`);
+    }
+    
+    return commentId;
+  } catch (error) {
+    console.error('[Redis Get Error]', error);
+    return null;
+  }
+}
