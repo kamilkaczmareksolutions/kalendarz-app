@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { saveSession } from '../../../../lib/session-store';
+import { saveSession, getSession } from '../../../../lib/session-store';
 
 // TA LINIA JEST KLUCZOWA - ZMUSZA VERCEL DO UŻYWANIA ŚRODOWISKA NODE.JS
 export const runtime = 'nodejs';
@@ -7,17 +7,27 @@ export const runtime = 'nodejs';
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const { psid, commentId } = body;
+    const { psid, ...newData } = body;
 
-    if (!psid || !commentId) {
-      return NextResponse.json({ error: 'Missing psid or commentId' }, { status: 400 });
+    if (!psid) {
+      return NextResponse.json({ error: 'Missing psid' }, { status: 400 });
     }
 
-    // Zapisz sesję w bazie danych Redis
-    await saveSession(psid, commentId);
+    if (Object.keys(newData).length === 0) {
+        return NextResponse.json({ error: 'No data provided to save' }, { status: 400 });
+    }
 
-    // Zwróć sukces, aby n8n wiedział, że wszystko jest w porządku
-    return NextResponse.json({ success: true, message: `Session saved for psid: ${psid}` });
+    // 1. Pobierz istniejącą sesję
+    const existingSession = await getSession(psid) || {};
+
+    // 2. Połącz istniejące dane z nowymi
+    const updatedSession = { ...existingSession, ...newData };
+
+    // 3. Zapisz zaktualizowaną sesję w Redis
+    await saveSession(psid, updatedSession);
+
+    // Zwróć sukces z zapisanymi danymi
+    return NextResponse.json({ success: true, message: `Session updated for psid: ${psid}`, data: updatedSession });
 
   } catch (error) {
     console.error('[API Save Error]', error);

@@ -18,20 +18,30 @@ async function getRedisClient() {
   return redisClient;
 }
 
-export async function saveSession(psid: string, commentId: string): Promise<void> {
+/**
+ * Zapisuje obiekt danych sesji w Redis.
+ * @param psid Identyfikator użytkownika (klucz).
+ * @param sessionData Obiekt z danymi sesji do zapisania.
+ */
+export async function saveSession(psid: string, sessionData: Record<string, any>): Promise<void> {
   try {
     const client = await getRedisClient();
     const key = `session:${psid}`;
-    const value = JSON.stringify({ commentId });
+    const value = JSON.stringify(sessionData);
     // Używamy stałej SESSION_TTL_SECONDS do ustawienia czasu wygaśnięcia.
     await client.set(key, value, { EX: SESSION_TTL_SECONDS });
-    console.log(`[Redis Store] Session saved for key: ${key} with TTL of 2 weeks.`);
+    console.log(`[Redis Store] Session saved for key: ${key} with TTL of 2 weeks. Data:`, sessionData);
   } catch (error) {
     console.error('[Redis Save Error]', error);
   }
 }
 
-export async function getSession(psid: string): Promise<{ commentId: string } | null> {
+/**
+ * Pobiera obiekt danych sesji z Redis.
+ * @param psid Identyfikator użytkownika (klucz).
+ * @returns Obiekt z danymi sesji lub null, jeśli nie znaleziono.
+ */
+export async function getSession(psid: string): Promise<Record<string, any> | null> {
   try {
     const client = await getRedisClient();
     const key = `session:${psid}`;
