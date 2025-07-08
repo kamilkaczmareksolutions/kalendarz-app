@@ -96,34 +96,6 @@ export async function POST(req: NextRequest) {
 		});
 		console.log('[UPDATE] Organizer calendar updated successfully.');
 
-		// 3. Find the main attendee (not the organizer) to update their calendar
-		const mainUserAttendee = event.attendees?.find(
-			(attendee) => attendee.email !== event.organizer?.email
-		);
-
-		// 4. If attendee exists, update their calendar via impersonation
-		if (mainUserAttendee && mainUserAttendee.email) {
-			console.log(`[UPDATE] Found main user: ${mainUserAttendee.email}. Now updating their event.`);
-			try {
-				const userAuth = getGoogleAuth(mainUserAttendee.email);
-				const userCalendar = google.calendar({ version: 'v3', auth: userAuth });
-
-				await userCalendar.events.update({
-					calendarId: 'primary',
-					eventId: eventId,
-					requestBody: updatedEventData,
-					sendNotifications: true,
-				});
-				console.log(`[UPDATE] Successfully updated event for attendee: ${mainUserAttendee.email}`);
-			} catch (impersonationError: unknown) {
-				const message = impersonationError instanceof Error ? impersonationError.message : 'An unknown error occurred';
-				console.error(`[UPDATE] Failed to update event for attendee ${mainUserAttendee.email}:`, message);
-				// Don't block success response if only the attendee update fails
-			}
-		} else {
-			console.log('[UPDATE] No other attendees found or attendee email is missing. Skipping attendee update.');
-		}
-
 		return NextResponse.json(organizerUpdateResponse.data);
 
 	} catch (error: unknown) {

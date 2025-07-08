@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { google } from 'googleapis';
 import { dayjs } from '@/lib/dayjs';
 import { z } from 'zod';
+import { getGoogleAuth } from '@/lib/google';
 
 // Uproszczony schemat walidacji - oczekujemy teraz na daty z n8n
 const availabilityQuerySchema = z.object({
@@ -15,19 +16,14 @@ const WORKING_HOURS = {
 };
 
 export async function POST(request: NextRequest) {
-  const serviceAccountAuth = new google.auth.JWT({
-    email: process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL,
-    key: process.env.GOOGLE_PRIVATE_KEY?.replace(/\\n/g, '\n'),
-    scopes: ['https://www.googleapis.com/auth/calendar.events.readonly'],
-    subject: process.env.GOOGLE_IMPERSONATION_EMAIL,
-  });
-
-  const calendar = google.calendar({
-    version: 'v3',
-    auth: serviceAccountAuth,
-  });
-
   try {
+    const auth = getGoogleAuth();
+    
+    const calendar = google.calendar({
+      version: 'v3',
+      auth: auth,
+    });
+
     const body = await request.json();
     const parsedQuery = availabilityQuerySchema.safeParse(body);
 
