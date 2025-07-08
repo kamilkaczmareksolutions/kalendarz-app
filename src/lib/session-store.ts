@@ -24,7 +24,7 @@ export async function saveSession(psid: string, commentId: string): Promise<void
     const key = `session:${psid}`;
     const value = JSON.stringify({ commentId });
     // Używamy stałej SESSION_TTL_SECONDS do ustawienia czasu wygaśnięcia.
-    await client.set(key, value, { ex: SESSION_TTL_SECONDS });
+    await client.set(key, value, { EX: SESSION_TTL_SECONDS });
     console.log(`[Redis Store] Session saved for key: ${key} with TTL of 2 weeks.`);
   } catch (error) {
     console.error('[Redis Save Error]', error);
