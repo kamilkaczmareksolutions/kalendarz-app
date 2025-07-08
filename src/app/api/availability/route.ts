@@ -29,7 +29,7 @@ export async function POST(req: NextRequest) {
         console.log(`[AVAILABILITY] Initial date from request (or now): ${startDate.format()}`);
         
         // Nigdy nie proponuj spotkań na dziś. Zawsze zaczynaj od jutra.
-        const tomorrow = dayjs.tz(TIME_ZONE).add(1, 'day').startOf('day');
+        const tomorrow = dayjs().tz(TIME_ZONE).add(1, 'day').startOf('day');
         if (startDate.isBefore(tomorrow)) {
             startDate = tomorrow;
             console.log(`[AVAILABILITY] Start date was before tomorrow. Reset to tomorrow: ${startDate.format()}`);
