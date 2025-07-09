@@ -37,45 +37,57 @@ export async function POST(req: NextRequest) {
 		const auth = getGoogleAuth();
 		const calendar = google.calendar({ version: 'v3', auth });
 
-		// ID wydarzenia jest używane bezpośrednio, bez dekodowania.
-		const eventId = id;
-		console.log(`[UPDATE] Using Event ID as is: ${eventId}`);
-
-		// Fetch the existing event to get details like attendees
-		let event;
+		// 1. Znajdź wydarzenie na podstawie unikalnego ID w opisie
+		let matchingEvent;
 		try {
-			console.log(`[UPDATE] Fetching event with ID: ${eventId}`);
-			const eventResponse = await calendar.events.get({
+			console.log(`[UPDATE] Searching for event with custom ID in description: ${id}`);
+			const now = dayjs();
+			// Przeszukujemy szerszy zakres, aby na pewno znaleźć wydarzenie
+			const timeMin = now.subtract(60, 'day').toISOString();
+			const timeMax = now.add(60, 'day').toISOString();
+
+			const eventsResponse = await calendar.events.list({
 				calendarId: 'primary',
-				eventId: eventId,
+				q: `Identyfikator wydarzenia: ${id}`, // Używamy q do przeszukiwania
+				singleEvents: true,
+				timeMin,
+				timeMax,
 			});
-			event = eventResponse.data;
-			console.log('[UPDATE] Successfully fetched event details.');
+
+			const events = eventsResponse.data.items;
+			if (!events || events.length === 0) {
+				console.error(`[UPDATE] Event with custom ID ${id} not found.`);
+				return NextResponse.json({ error: 'Event not found.' }, { status: 404 });
+			}
+
+			if (events.length > 1) {
+				console.warn(`[UPDATE] Found multiple events with the same custom ID: ${id}. Using the first one.`);
+			}
+			matchingEvent = events[0];
+			console.log(`[UPDATE] Found matching event with Google Event ID: ${matchingEvent.id}`);
+
 		} catch (error: unknown) {
 			const message = error instanceof Error ? error.message : 'An unknown error occurred';
-			console.error('[UPDATE] Error fetching event:', message);
-			// If event not found, it might have been deleted or is invalid
-			return NextResponse.json({ error: 'Event not found or invalid ID.' }, { status: 404 });
-		}
-
-		if (!event.attendees) {
-			console.log('[UPDATE] Event has no attendees. Cannot update.');
-			return NextResponse.json({ error: 'Event has no attendees.' }, { status: 400 });
+			console.error('[UPDATE] Error searching for event:', message);
+			return NextResponse.json({ error: 'Failed to search for event', details: message }, { status: 500 });
 		}
 		
-		const organizer = event.organizer;
-		if (!organizer || !organizer.email) {
-			console.error('[UPDATE] Organizer email is missing from the event.');
-			return NextResponse.json({ error: 'Organizer email is missing.' }, { status: 500 });
+		if (!matchingEvent) {
+			console.error(`[UPDATE] Logic error: matchingEvent is null or undefined after search.`);
+			return NextResponse.json({ error: 'Event not found after search.' }, { status: 404 });
 		}
 
-		console.log(`[UPDATE] Original organizer: ${organizer.email}`);
-		
-		// 1. Prepare the updated event data
+		// Zabezpieczenie przed brakiem ID
+		if (!matchingEvent.id) {
+			console.error(`[UPDATE] Found event does not have a Google Event ID.`);
+			return NextResponse.json({ error: 'Found event is invalid.' }, { status: 500 });
+		}
+
+		// 2. Przygotuj zaktualizowane dane wydarzenia
 		const updatedEventData = {
-			summary: event.summary,
-			description: event.description,
-			attendees: event.attendees,
+			summary: matchingEvent.summary,
+			description: matchingEvent.description,
+			attendees: matchingEvent.attendees,
 			start: {
 				dateTime: dayjs(newDate).toISOString(),
 				timeZone: 'Europe/Warsaw',
@@ -86,17 +98,17 @@ export async function POST(req: NextRequest) {
 			},
 		};
 
-		// 2. Update the event in the organizer's calendar first
-		console.log('[UPDATE] Updating event in organizer calendar...');
-		const organizerUpdateResponse = await calendar.events.update({
+		// 3. Zaktualizuj wydarzenie używając jego PRAWDZIWEGO ID z Google
+		console.log(`[UPDATE] Updating event with Google Event ID: ${matchingEvent.id}...`);
+		const updateResponse = await calendar.events.update({
 			calendarId: 'primary',
-			eventId: eventId,
+			eventId: matchingEvent.id, // Używamy prawdziwego ID
 			requestBody: updatedEventData,
 			sendNotifications: true,
 		});
-		console.log('[UPDATE] Organizer calendar updated successfully.');
+		console.log('[UPDATE] Event updated successfully in Google Calendar.');
 
-		return NextResponse.json(organizerUpdateResponse.data);
+		return NextResponse.json(updateResponse.data);
 
 	} catch (error: unknown) {
 		const message = error instanceof Error ? error.message : 'An unknown error occurred';
