@@ -4,7 +4,6 @@ import { dayjs } from '@/lib/dayjs';
 import { z } from 'zod';
 import { getGoogleAuth } from '@/lib/google';
 
-// Uproszczony schemat walidacji - oczekujemy teraz na daty z n8n
 const availabilityQuerySchema = z.object({
   startDate: z.string().transform((str) => dayjs(str).startOf('day')),
   endDate: z.string().transform((str) => dayjs(str).endOf('day')),
@@ -12,8 +11,10 @@ const availabilityQuerySchema = z.object({
 
 const WORKING_HOURS = {
   start: 12,
-  end: 16,
+  end: 16, // The loop will run up to (but not including) 16, so 12, 13, 14, 15.
 };
+
+const TIMEZONE = 'Europe/Warsaw';
 
 export async function POST(request: NextRequest) {
   console.log('[AVAILABILITY] Received request for available slots.');
@@ -37,7 +38,6 @@ export async function POST(request: NextRequest) {
     const { startDate, endDate } = parsedQuery.data;
     console.log(`[AVAILABILITY] Checking for range: ${startDate.toISOString()} to ${endDate.toISOString()}`);
 
-    // Pobierz wszystkie zajęte terminy w podanym przez n8n zakresie
     const calendarResponse = await calendar.events.list({
       calendarId: process.env.GOOGLE_CALENDAR_ID,
       timeMin: startDate.toISOString(),
@@ -56,18 +56,22 @@ export async function POST(request: NextRequest) {
     let currentDate = startDate.clone();
 
     while (currentDate.isBefore(endDate) || currentDate.isSame(endDate, 'day')) {
-      // Pomiń weekendy
-      if (currentDate.day() !== 0 && currentDate.day() !== 6) {
+      if (currentDate.day() !== 0 && currentDate.day() !== 6) { // Skip weekends
         for (let hour = WORKING_HOURS.start; hour < WORKING_HOURS.end; hour++) {
-          const slotTime = currentDate.set('hour', hour).startOf('hour');
+          
+          // --- TIMEZONE FIX ---
+          // Create the slot time in the correct timezone ('Europe/Warsaw')
+          // This correctly interprets the working hours as Polish time.
+          const slotTime = dayjs.tz(currentDate, TIMEZONE).hour(hour).minute(0).second(0);
           
           const isSlotBooked = busySlots.some(busySlot =>
             slotTime.isBetween(busySlot.start, busySlot.end, null, '[)')
           );
 
+          // The comparison is against the server's current time (UTC)
           if (!isSlotBooked && slotTime.isAfter(dayjs())) {
             availableSlots.push({
-              time: slotTime.toISOString(),
+              time: slotTime.toISOString(), // .toISOString() always returns UTC for the bot
               isAvailable: true,
             });
           }
