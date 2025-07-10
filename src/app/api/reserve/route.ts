@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import dayjs from 'dayjs';
 import utc from 'dayjs/plugin/utc';
 import timezone from 'dayjs/plugin/timezone';
+import { getSession, saveSession } from '../../../lib/session-store';
 
 dayjs.extend(utc);
 dayjs.extend(timezone);
@@ -22,13 +23,13 @@ export async function POST(req: NextRequest) {
 	const body = await req.json();
 	console.log('[RESERVE] Raw request body:', JSON.stringify(body, null, 2));
 
-	const { name, email, phone, slot } = body;
-	console.log(`[RESERVE] Destructured data: name=${name}, email=${email}, phone=${phone}, slot=${slot}`);
+	const { name, email, phone, slot, psid } = body;
+	console.log(`[RESERVE] Destructured data: name=${name}, email=${email}, phone=${phone}, slot=${slot}, psid=${psid}`);
 
-	if (!name || !email || !phone || !slot) {
+	if (!name || !email || !phone || !slot || !psid) {
 		console.error('[RESERVE] Validation failed: Missing required fields.');
 		return NextResponse.json(
-			{ message: 'Missing required fields: name, email, phone, slot' },
+			{ message: 'Missing required fields: name, email, phone, slot, psid' },
 			{ status: 400 }
 		);
 	}
@@ -82,6 +83,21 @@ export async function POST(req: NextRequest) {
 			requestBody: event,
 			sendUpdates: 'all',
 		});
+
+		// --- NEW, RELIABLE LOGIC ---
+		// Immediately save the generated eventId to the user's Redis session.
+		try {
+			console.log(`[RESERVE] Saving eventId ${uniqueId} to session for psid: ${psid}`);
+			const existingSession = await getSession(psid) || {};
+			const updatedSessionData = { ...existingSession, eventId: uniqueId };
+			await saveSession(psid, updatedSessionData);
+			console.log(`[RESERVE] Session updated successfully for psid: ${psid}`);
+		} catch (sessionError) {
+			// Log the error, but don't fail the entire request,
+			// as the calendar event was already created.
+			console.error('[RESERVE] CRITICAL: Failed to save eventId to Redis session:', sessionError);
+		}
+		// --- END OF NEW LOGIC ---
 
 		return NextResponse.json(
 			{
