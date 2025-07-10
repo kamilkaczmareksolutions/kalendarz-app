@@ -15,31 +15,31 @@ export const runtime = 'nodejs'; // Force Node.js runtime for compatibility with
 export async function POST(req: NextRequest) {
 	console.log('[UPDATE] Received request to update event.');
 	try {
-		const token = req.headers.get('x-webhook-token');
-		if (token !== process.env.WEBHOOK_SECRET) {
-			return NextResponse.json(
-				{ message: 'Forbidden – invalid token' },
-				{ status: 403 }
-			);
-		}
+	const token = req.headers.get('x-webhook-token');
+	if (token !== process.env.WEBHOOK_SECRET) {
+		return NextResponse.json(
+			{ message: 'Forbidden – invalid token' },
+			{ status: 403 }
+		);
+	}
 
 		console.log('[UPDATE] Token validated.');
-		const body = await req.json();
+	const body = await req.json();
 		console.log('[UPDATE] Raw request body:', JSON.stringify(body, null, 2));
-		const { id, newDate } = body;
+	const { id, newDate } = body;
 		console.log(`[UPDATE] Destructured data: id=${id}, newDate=${newDate}`);
 
-		if (!id || !newDate) {
+	if (!id || !newDate) {
 			console.error('[UPDATE] Validation failed: Missing id or newDate.');
 			return NextResponse.json({ error: 'Missing id or newDate' }, { status: 400 });
-		}
+	}
 
 		const auth = getGoogleAuth();
-		const calendar = google.calendar({ version: 'v3', auth });
+	const calendar = google.calendar({ version: 'v3', auth });
 
 		// 1. Znajdź wydarzenie na podstawie unikalnego ID w opisie
 		let matchingEvent;
-		try {
+	try {
 			console.log(`[UPDATE] Searching for event with custom ID in description: ${id}`);
 			const now = dayjs();
 			// Przeszukujemy szerszy zakres, aby na pewno znaleźć wydarzenie
@@ -52,13 +52,13 @@ export async function POST(req: NextRequest) {
 				singleEvents: true,
 				timeMin,
 				timeMax,
-			});
+		});
 
 			const events = eventsResponse.data.items;
 			if (!events || events.length === 0) {
 				console.error(`[UPDATE] Event with custom ID ${id} not found.`);
 				return NextResponse.json({ error: 'Event not found.' }, { status: 404 });
-			}
+		}
 
 			if (events.length > 1) {
 				console.warn(`[UPDATE] Found multiple events with the same custom ID: ${id}. Using the first one.`);
@@ -88,14 +88,14 @@ export async function POST(req: NextRequest) {
 			summary: matchingEvent.summary,
 			description: matchingEvent.description,
 			attendees: matchingEvent.attendees,
-			start: {
+				start: {
 				dateTime: dayjs(newDate).toISOString(),
-				timeZone: 'Europe/Warsaw',
-			},
-			end: {
+					timeZone: 'Europe/Warsaw',
+				},
+				end: {
 				dateTime: dayjs(newDate).add(30, 'minutes').toISOString(),
-				timeZone: 'Europe/Warsaw',
-			},
+					timeZone: 'Europe/Warsaw',
+				},
 		};
 
 		// 3. Zaktualizuj wydarzenie używając jego PRAWDZIWEGO ID z Google
