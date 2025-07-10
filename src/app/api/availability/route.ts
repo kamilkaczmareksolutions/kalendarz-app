@@ -16,6 +16,7 @@ const WORKING_HOURS = {
 };
 
 export async function POST(request: NextRequest) {
+  console.log('[AVAILABILITY] Received request for available slots.');
   try {
     const auth = getGoogleAuth();
     
@@ -25,13 +26,16 @@ export async function POST(request: NextRequest) {
     });
 
     const body = await request.json();
+    console.log('[AVAILABILITY] Raw request body:', JSON.stringify(body, null, 2));
     const parsedQuery = availabilityQuerySchema.safeParse(body);
 
     if (!parsedQuery.success) {
+      console.error('[AVAILABILITY] Validation failed:', parsedQuery.error.flatten());
       return NextResponse.json({ error: 'Invalid body parameters', details: parsedQuery.error.flatten() }, { status: 400 });
     }
 
     const { startDate, endDate } = parsedQuery.data;
+    console.log(`[AVAILABILITY] Checking for range: ${startDate.toISOString()} to ${endDate.toISOString()}`);
 
     // Pobierz wszystkie zajęte terminy w podanym przez n8n zakresie
     const calendarResponse = await calendar.events.list({
@@ -46,6 +50,7 @@ export async function POST(request: NextRequest) {
       start: dayjs(event.start?.dateTime),
       end: dayjs(event.end?.dateTime),
     })) ?? [];
+    console.log(`[AVAILABILITY] Found ${busySlots.length} busy slots.`);
 
     const availableSlots: { time: string; isAvailable: boolean }[] = [];
     let currentDate = startDate.clone();
@@ -71,9 +76,10 @@ export async function POST(request: NextRequest) {
       currentDate = currentDate.add(1, 'day');
     }
 
+    console.log(`[AVAILABILITY] Returning ${availableSlots.length} available slots.`);
     return NextResponse.json({ availableSlots });
   } catch (error) {
-    console.error('Error fetching availability:', error);
+    console.error('[AVAILABILITY] A critical error occurred:', error);
     return NextResponse.json({ error: 'Failed to fetch availability' }, { status: 500 });
   }
 }

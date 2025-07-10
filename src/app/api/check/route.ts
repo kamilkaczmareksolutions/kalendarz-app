@@ -21,16 +21,15 @@ export async function POST(request: NextRequest) {
 		const calendar = google.calendar({ version: 'v3', auth });
 
 		try {
-			const eventId = id; // Używamy ID bezpośrednio, bez dekodowania
-			console.log(`[CHECK] Using Event ID as is: ${eventId}`);
+			const eventId = id; // Używamy ID bezpośrednio
 			
-			console.log(`[CHECK] Fetching event with ID: ${eventId}`);
+			console.log(`[CHECK] Fetching event with ID: ${eventId} from primary calendar.`);
 			const eventResponse = await calendar.events.get({
 				calendarId: 'primary',
 				eventId: eventId,
 			});
 			
-			console.log('[CHECK] Event found.');
+			console.log('[CHECK] Event found successfully.');
 			return NextResponse.json({
 				exists: true,
 				event: eventResponse.data,
@@ -38,7 +37,7 @@ export async function POST(request: NextRequest) {
 
 		} catch (error: unknown) {
 			if (error && typeof error === 'object' && 'code' in error && (error as {code: number}).code === 404) {
-				console.log('[CHECK] Event not found in calendar.');
+				console.log('[CHECK] Event not found in calendar (404).');
 				return NextResponse.json({ exists: false });
 			}
 			// Re-throw other errors

@@ -17,6 +17,7 @@ export async function POST(req: NextRequest) {
 	try {
 	const token = req.headers.get('x-webhook-token');
 	if (token !== process.env.WEBHOOK_SECRET) {
+    console.error('[UPDATE] Forbidden: Invalid token provided.');
 		return NextResponse.json(
 			{ message: 'Forbidden – invalid token' },
 			{ status: 403 }
