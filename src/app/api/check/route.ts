@@ -1,5 +1,6 @@
 import { google } from 'googleapis';
 import { NextRequest, NextResponse } from 'next/server';
+import dayjs from 'dayjs';
 import { getGoogleAuth } from '@/lib/google';
 
 export const runtime = 'nodejs'; // Force Node.js runtime for compatibility with Google APIs
@@ -20,29 +21,43 @@ export async function POST(request: NextRequest) {
 		const auth = getGoogleAuth();
 		const calendar = google.calendar({ version: 'v3', auth });
 
-		try {
-			const eventId = id; // Używamy ID bezpośrednio
-			
-			console.log(`[CHECK] Fetching event with ID: ${eventId} from primary calendar.`);
-			const eventResponse = await calendar.events.get({
-				calendarId: 'primary',
-				eventId: eventId,
-			});
-			
-			console.log('[CHECK] Event found successfully.');
-			return NextResponse.json({
-				exists: true,
-				event: eventResponse.data,
-			});
+		// --- CORRECT LOGIC: Search for the event using a query in the description ---
+		console.log(`[CHECK] Searching for event with custom ID in description: ${id}`);
+		const now = dayjs();
+		// Search a wide range to ensure the event is found
+		const timeMin = now.subtract(60, 'day').toISOString();
+		const timeMax = now.add(60, 'day').toISOString();
 
-		} catch (error: unknown) {
-			if (error && typeof error === 'object' && 'code' in error && (error as {code: number}).code === 404) {
-				console.log('[CHECK] Event not found in calendar (404).');
-				return NextResponse.json({ exists: false });
-			}
-			// Re-throw other errors
-			throw error;
+		const eventsResponse = await calendar.events.list({
+			calendarId: 'primary',
+			q: `Identyfikator wydarzenia: ${id}`, // Use q to search the description
+			singleEvents: true,
+			timeMin,
+			timeMax,
+		});
+
+		const events = eventsResponse.data.items;
+
+		// If no events are found, it doesn't exist
+		if (!events || events.length === 0) {
+			console.log(`[CHECK] Event with custom ID ${id} not found in Google Calendar.`);
+			return NextResponse.json({ exists: false });
 		}
+
+		// Warn if multiple events are found, but proceed with the first one
+		if (events.length > 1) {
+			console.warn(`[CHECK] Found multiple events with the same custom ID: ${id}. Using the first one.`);
+		}
+		
+		const matchingEvent = events[0];
+		console.log(`[CHECK] Found matching event with Google Event ID: ${matchingEvent.id}`);
+
+		// Return the found event data
+		return NextResponse.json({
+			exists: true,
+			event: matchingEvent,
+		});
+
 	} catch (error: unknown) {
 		const message = error instanceof Error ? error.message : 'An unknown error occurred';
 		console.error('[CHECK] A critical error occurred:', error);
