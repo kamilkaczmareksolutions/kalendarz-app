@@ -23,13 +23,16 @@ export async function POST(req: NextRequest) {
 	const body = await req.json();
 	console.log('[RESERVE] Raw request body:', JSON.stringify(body, null, 2));
 
-	const { name, email, phone, slot, psid } = body;
-	console.log(`[RESERVE] Destructured data: name=${name}, email=${email}, phone=${phone}, slot=${slot}, psid=${psid}`);
+	// --- CRITICAL CHANGE: PSID is now read from a secure header ---
+	const psid = req.headers.get('x-real-psid');
+	const { name, email, phone, slot } = body;
+	console.log(`[RESERVE] Destructured data: name=${name}, email=${email}, phone=${phone}, slot=${slot}`);
+	console.log(`[RESERVE] Secure PSID from header: ${psid}`);
 
 	if (!name || !email || !phone || !slot || !psid) {
-		console.error('[RESERVE] Validation failed: Missing required fields.');
+		console.error('[RESERVE] Validation failed: Missing required fields in body or x-real-psid header.');
 		return NextResponse.json(
-			{ message: 'Missing required fields: name, email, phone, slot, psid' },
+			{ message: 'Missing required fields: name, email, phone, slot in body and x-real-psid in header' },
 			{ status: 400 }
 		);
 	}
