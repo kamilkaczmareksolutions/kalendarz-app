@@ -54,6 +54,7 @@ export async function POST(request: NextRequest) {
 
     const availableSlots: { time: string; isAvailable: boolean }[] = [];
     let currentDate = startDate.clone();
+    const todayInWarsaw = dayjs().tz(TIMEZONE);
 
     while (currentDate.isBefore(endDate) || currentDate.isSame(endDate, 'day')) {
       if (currentDate.day() !== 0 && currentDate.day() !== 6) { // Skip weekends
@@ -68,8 +69,9 @@ export async function POST(request: NextRequest) {
             slotTime.isBetween(busySlot.start, busySlot.end, null, '[)')
           );
 
-          // The comparison is against the server's current time (UTC)
-          if (!isSlotBooked && slotTime.isAfter(dayjs())) {
+          // FIX: Prevent same-day bookings.
+          // The slot must now be in the future AND not on the same calendar day as today.
+          if (!isSlotBooked && slotTime.isAfter(todayInWarsaw) && !slotTime.isSame(todayInWarsaw, 'day')) {
             availableSlots.push({
               time: slotTime.toISOString(), // .toISOString() always returns UTC for the bot
               isAvailable: true,
