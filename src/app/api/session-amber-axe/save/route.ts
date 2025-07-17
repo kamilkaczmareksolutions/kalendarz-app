@@ -29,6 +29,12 @@ export async function POST(request: Request) {
     const updatedSession = Object.keys(newData).length > 0 
       ? { ...existingSession, ...newData } 
       : {}; // To zapewni wyczyszczenie sesji
+    
+    // Posprzątaj po starym błędzie: zawsze usuwaj zagnieżdżony obiekt 'data', jeśli istnieje
+    if ('data' in updatedSession) {
+      delete updatedSession.data;
+    }
+
     console.log(`[SESSION_SAVE_AMBER_AXE] Updated session for psid ${psid}:`, JSON.stringify(updatedSession, null, 2));
 
     // 3. Zapisz zaktualizowaną sesję w Redis
