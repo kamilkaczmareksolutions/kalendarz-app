@@ -22,13 +22,12 @@ export function getGoogleAuth() {
 }
 
 export function getAmberAxeGoogleAuth() {
-  const privateKey = process.env.AMBER_AXE_GOOGLE_PRIVATE_KEY?.replace(/\\n/g, '\n');
+  const privateKey = process.env.AMBER_AXE_GOOGLE_PRIVATE_KEY?.replace(/\\n/g, '\\n');
   const clientEmail = process.env.AMBER_AXE_GOOGLE_CLIENT_EMAIL;
-  const impersonationEmail = process.env.AMBER_AXE_GOOGLE_IMPERSONATION_EMAIL;
 
-  if (!privateKey || !clientEmail || !impersonationEmail) {
+  if (!privateKey || !clientEmail) {
     throw new Error(
-      'Missing Amber Axe Google credentials. Ensure AMBER_AXE_GOOGLE_PRIVATE_KEY, AMBER_AXE_GOOGLE_CLIENT_EMAIL, and AMBER_AXE_GOOGLE_IMPERSONATION_EMAIL are set.',
+      'Missing Amber Axe Google credentials. Ensure AMBER_AXE_GOOGLE_PRIVATE_KEY and AMBER_AXE_GOOGLE_CLIENT_EMAIL are set.',
     );
   }
 
@@ -36,7 +35,8 @@ export function getAmberAxeGoogleAuth() {
     email: clientEmail,
     key: privateKey,
     scopes: ['https://www.googleapis.com/auth/calendar.events'],
-    subject: impersonationEmail,
+    // Usunięto 'subject' (impersonację), ponieważ nie jest ona potrzebna i powodowała błąd.
+    // Teraz wystarczy udostępnić kalendarz bezpośrednio na adres email konta serwisowego.
   });
 
   return auth;
