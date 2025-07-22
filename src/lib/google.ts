@@ -22,7 +22,7 @@ export function getGoogleAuth() {
 }
 
 export function getAmberAxeGoogleAuth() {
-  const privateKey = process.env.AMBER_AXE_GOOGLE_PRIVATE_KEY?.replace(/\\n/g, '\\n');
+  const privateKey = process.env.AMBER_AXE_GOOGLE_PRIVATE_KEY?.replace(/\\n/g, '\n');
   const clientEmail = process.env.AMBER_AXE_GOOGLE_CLIENT_EMAIL;
 
   if (!privateKey || !clientEmail) {
