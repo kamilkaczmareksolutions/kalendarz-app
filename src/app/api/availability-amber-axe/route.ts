@@ -42,8 +42,12 @@ export async function POST(request: NextRequest) {
     }
 
     const { startDate, endDate } = parsedQuery.data;
-    const calendarId = process.env.AMBER_AXE_GOOGLE_CALENDAR_ID;
-    if (!calendarId) throw new Error('AMBER_AXE_GOOGLE_CALENDAR_ID is not set.');
+    const rawCalendarId = process.env.AMBER_AXE_GOOGLE_CALENDAR_ID;
+
+    if (!rawCalendarId) {
+      throw new Error('AMBER_AXE_GOOGLE_CALENDAR_ID is not set.');
+    }
+    const calendarId = decodeURIComponent(rawCalendarId);
 
     console.log(`[AVAILABILITY_AMBER_AXE_V2] Checking for range: ${startDate.toISOString()} to ${endDate.toISOString()}`);
 
