@@ -1,37 +1,47 @@
 import { NextResponse } from 'next/server';
-import { getSession } from '../../../../lib/session-store';
+import { getSession, saveSession } from '../../../../lib/session-store';
 
 // TA LINIA JEST KLUCZOWA - ZMUSZA VERCEL DO UŻYWANIA ŚRODOWISKA NODE.JS
 export const runtime = 'nodejs';
 
 export async function POST(request: Request) {
-  console.log('[SESSION_GET_AMBER_AXE] Received request to get session data.');
+  console.log('[SESSION_GET_AMBER_AXE_V2] Received request to get session data.');
   try {
     const body = await request.json();
     const { psid } = body;
-    console.log(`[SESSION_GET_AMBER_AXE] Request for psid: ${psid}`);
+    console.log(`[SESSION_GET_AMBER_AXE_V2] Request for psid: ${psid}`);
 
     if (!psid) {
-      console.error('[SESSION_GET_AMBER_AXE] Validation failed: Missing psid.');
+      console.error('[SESSION_GET_AMBER_AXE_V2] Validation failed: Missing psid.');
       return NextResponse.json({ error: 'Missing psid' }, { status: 400 });
     }
 
-    // Odczytaj obiekt sesji z bazy Redis (np. { "commentId": "123_456" })
-    const sessionData = await getSession(psid);
+    let sessionData = await getSession(psid);
 
     if (!sessionData) {
-      // To jest oczekiwane zachowanie, gdy sesja nie istnieje lub wygasła
-      console.log(`[SESSION_GET_AMBER_AXE] Session not found for psid: ${psid}`);
-      return NextResponse.json({ error: 'Session not found or expired' }, { status: 404 });
+      console.log(`[SESSION_GET_AMBER_AXE_V2] Session not found for psid: ${psid}. Creating a new one.`);
+      
+      // Jeśli sesja nie istnieje, tworzymy nową.
+      const newCommentId = `${psid}_${Date.now()}`;
+      const newSession = {
+        commentId: newCommentId,
+        human_takeover: false,
+      };
+
+      // Zapisujemy nową sesję w bazie danych.
+      await saveSession(psid, newSession);
+      console.log(`[SESSION_GET_AMBER_AXE_V2] New session created and saved for psid: ${psid}.`);
+      
+      // Ustawiamy dane sesji na nowo utworzoną sesję.
+      sessionData = newSession;
     }
 
-    // Zwróć znaleziony obiekt sesji bezpośrednio.
-    // Odpowiedź będzie miała postać: { "commentId": "123_456" }
-    console.log(`[SESSION_GET_AMBER_AXE] Found session data for psid: ${psid}. Data:`, JSON.stringify(sessionData, null, 2));
+    // Zwracamy znalezione lub nowo utworzone dane sesji.
+    console.log(`[SESSION_GET_AMBER_AXE_V2] Returning session data for psid: ${psid}. Data:`, JSON.stringify(sessionData, null, 2));
     return NextResponse.json(sessionData);
 
   } catch (error) {
-    console.error('[SESSION_GET_AMBER_AXE] A critical error occurred:', error);
+    console.error('[SESSION_GET_AMBER_AXE_V2] A critical error occurred:', error);
     const errorMessage = error instanceof Error ? error.message : 'An unknown error occurred';
     return NextResponse.json({ error: 'Internal Server Error', details: errorMessage }, { status: 500 });
   }
