@@ -11,7 +11,7 @@ const availabilityQuerySchema = z.object({
 
 const WORKING_HOURS = {
   start: 12,
-  end: 22,
+  end: 21, // Poprawka: koniec o 21:00, pętla generuje sloty do 20:30 włącznie.
 };
 const SLOT_DURATION_MINUTES = 30;
 const BOOKING_BUFFER_MINUTES = 90;
@@ -98,19 +98,25 @@ export async function POST(request: NextRequest) {
           currentRange.end = slot.time;
         } else {
           if (currentRange.start && currentRange.end) {
-            availabilityRanges.push({
-              start: currentRange.start.format('HH:mm'),
-              end: currentRange.end.add(SLOT_DURATION_MINUTES, 'minutes').format('HH:mm'),
-            });
+            const duration = currentRange.end.add(SLOT_DURATION_MINUTES, 'minutes').diff(currentRange.start, 'minutes');
+            if (duration >= 60) {
+              availabilityRanges.push({
+                start: currentRange.start.format('HH:mm'),
+                end: currentRange.end.add(SLOT_DURATION_MINUTES, 'minutes').format('HH:mm'),
+              });
+            }
           }
           currentRange = { start: null, end: null };
         }
       }
       if (currentRange.start && currentRange.end) {
-        availabilityRanges.push({
-          start: currentRange.start.format('HH:mm'),
-          end: currentRange.end.add(SLOT_DURATION_MINUTES, 'minutes').format('HH:mm'),
-        });
+        const duration = currentRange.end.add(SLOT_DURATION_MINUTES, 'minutes').diff(currentRange.start, 'minutes');
+        if (duration >= 60) {
+          availabilityRanges.push({
+            start: currentRange.start.format('HH:mm'),
+            end: currentRange.end.add(SLOT_DURATION_MINUTES, 'minutes').format('HH:mm'),
+          });
+        }
       }
 
       if (availabilityRanges.length > 0) {
