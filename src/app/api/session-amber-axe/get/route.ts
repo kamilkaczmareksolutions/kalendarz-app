@@ -36,6 +36,14 @@ export async function POST(request: Request) {
       sessionData = newSession;
     }
 
+    // Zapewnienie spójności klucza 'locked' przed zwróceniem danych do n8n
+    if (sessionData && typeof sessionData.lock === 'boolean') {
+      if (typeof sessionData.locked !== 'boolean') {
+        sessionData.locked = sessionData.lock;
+      }
+      delete sessionData.lock;
+    }
+
     // Zwracamy znalezione lub nowo utworzone dane sesji.
     console.log(`[SESSION_GET_AMBER_AXE_V2] Returning session data for psid: ${psid}. Data:`, JSON.stringify(sessionData, null, 2));
     return NextResponse.json(sessionData);

@@ -26,9 +26,15 @@ export async function POST(request: Request) {
     console.log(`[SESSION_SAVE_AMBER_AXE] Existing session for psid ${psid}:`, JSON.stringify(existingSession, null, 2));
 
     // 2. Połącz istniejące dane z nowymi lub wyczyść sesję
-    const updatedSession = Object.keys(newData).length > 0 
+    let updatedSession = Object.keys(newData).length > 0 
       ? { ...existingSession, ...newData } 
       : {}; // To zapewni wyczyszczenie sesji
+    
+    // Ujednolić klucz 'lock' do 'locked' i zapewnić spójność stanu
+    if (typeof updatedSession.lock === 'boolean') {
+      updatedSession.locked = updatedSession.lock;
+      delete updatedSession.lock;
+    }
     
     // Posprzątaj po starym błędzie: zawsze usuwaj zagnieżdżony obiekt 'data', jeśli istnieje
     if ('data' in updatedSession) {
