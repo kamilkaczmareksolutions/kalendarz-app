@@ -26,7 +26,7 @@ export async function POST(request: Request) {
     console.log(`[SESSION_SAVE_AMBER_AXE] Existing session for psid ${psid}:`, JSON.stringify(existingSession, null, 2));
 
     // 2. Połącz istniejące dane z nowymi lub wyczyść sesję
-    let updatedSession = Object.keys(newData).length > 0 
+    const updatedSession = Object.keys(newData).length > 0 
       ? { ...existingSession, ...newData } 
       : {}; // To zapewni wyczyszczenie sesji
     
