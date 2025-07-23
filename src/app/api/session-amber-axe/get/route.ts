@@ -36,12 +36,10 @@ export async function POST(request: Request) {
       sessionData = newSession;
     }
 
-    // Zapewnienie spójności klucza 'locked' przed zwróceniem danych do n8n
-    if (sessionData && typeof sessionData.lock === 'boolean') {
-      if (typeof sessionData.locked !== 'boolean') {
-        sessionData.locked = sessionData.lock;
-      }
-      delete sessionData.lock;
+    // Zapewnienie spójności klucza 'lock' na rzecz n8n przed zwróceniem danych
+    if (sessionData && typeof sessionData.locked === 'boolean') {
+      sessionData.lock = sessionData.locked;
+      delete sessionData.locked;
     }
 
     // Zwracamy znalezione lub nowo utworzone dane sesji.

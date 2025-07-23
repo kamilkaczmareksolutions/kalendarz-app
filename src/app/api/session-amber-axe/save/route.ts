@@ -30,10 +30,10 @@ export async function POST(request: Request) {
       ? { ...existingSession, ...newData } 
       : {}; // To zapewni wyczyszczenie sesji
     
-    // Ujednolić klucz 'lock' do 'locked' i zapewnić spójność stanu
-    if (typeof updatedSession.lock === 'boolean') {
-      updatedSession.locked = updatedSession.lock;
-      delete updatedSession.lock;
+    // Ujednolicić klucz 'locked' do 'lock' i zapewnić spójność stanu na rzecz n8n
+    if (typeof updatedSession.locked === 'boolean') {
+      updatedSession.lock = updatedSession.locked;
+      delete updatedSession.locked;
     }
     
     // Posprzątaj po starym błędzie: zawsze usuwaj zagnieżdżony obiekt 'data', jeśli istnieje
