@@ -26,6 +26,7 @@ export async function POST(request: Request) {
       const newSession = {
         commentId: newCommentId,
         human_takeover: false,
+        from_ad: true, // Poprawka: Nowa, organiczna sesja ZAWSZE dostaje flagę `true`, aby zobaczyć wiadomość powitalną.
       };
 
       // Zapisujemy nową sesję w bazie danych.
