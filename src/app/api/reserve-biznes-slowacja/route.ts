@@ -65,7 +65,7 @@ export async function POST(req: NextRequest) {
 		const uniqueId = Math.random().toString(36).substring(2, 15);
 
 		const event = {
-			summary: `Konsultacja zlec.ai - ${name}`,
+			summary: `Konsultacja z klientem - ${name}`,
 			description: `Imię i nazwisko: ${name}\nE-mail: ${email}\nTelefon: ${phone}\nIdentyfikator wydarzenia: ${uniqueId}`,
 			start: {
 				dateTime: start.toISOString(),
